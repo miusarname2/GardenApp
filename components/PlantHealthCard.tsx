@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
 
 import { ThemedText } from '@/components/themed-text';
+import { EcoColors } from '@/constants/theme';
 
 import Animated, { useAnimatedStyle, withTiming, withDelay } from 'react-native-reanimated';
 
@@ -67,13 +68,13 @@ export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
       <View style={styles.gridContainer}>
         
         {/* Hydration Card */}
-        <View style={[styles.bentoCard, { backgroundColor: '#eff6e7' }]}>
+        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerLow }]}>
           <View>
-            <MaterialIcons name="water-drop" size={24} color="#206223" style={styles.cardIcon} />
-            <ThemedText type="labelSmall" style={styles.cardSubtitle}>Hydration</ThemedText>
+            <MaterialIcons name="water-drop" size={24} color={EcoColors.primary} style={styles.cardIcon} />
+            <ThemedText style={styles.cardSubtitle}>Hydration</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-            <ThemedText type="displaySmall" style={styles.cardValue}>{data.hydration}%</ThemedText>
+            <ThemedText style={styles.cardValue}>{data.hydration}%</ThemedText>
             <View style={styles.progressBarBg}>
               <Animated.View style={[styles.progressBarFill, progressStyle]} />
             </View>
@@ -81,58 +82,58 @@ export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
         </View>
 
         {/* Light Card */}
-        <View style={[styles.bentoCard, { backgroundColor: '#dee5d6' }]}>
+        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerHighest }]}>
            <View>
-            <MaterialIcons name="wb-sunny" size={24} color="#325c5a" style={styles.cardIcon} />
-            <ThemedText type="labelSmall" style={styles.cardSubtitle}>Light Level</ThemedText>
+            <MaterialIcons name="light-mode" size={24} color={EcoColors.tertiary} style={styles.cardIcon} />
+            <ThemedText style={styles.cardSubtitle}>Light Level</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-            <ThemedText type="displaySmall" style={styles.cardValue}>{(data.light / 1000).toFixed(1)}k</ThemedText>
-            <ThemedText type="labelSmall" style={styles.cardDetail}>LUX • OPTIMAL</ThemedText>
+            <ThemedText style={styles.cardValue}>{(data.light / 1000).toFixed(1)}k</ThemedText>
+            <ThemedText style={styles.cardDetail}>LUX • OPTIMAL</ThemedText>
           </View>
         </View>
 
         {/* Temp Card */}
-        <View style={[styles.bentoCard, { backgroundColor: '#e3ebdc' }]}>
+        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerHigh }]}>
           <View>
-            <MaterialIcons name="device-thermostat" size={24} color="#ba1a1a" style={styles.cardIcon} />
-            <ThemedText type="labelSmall" style={styles.cardSubtitle}>Temp</ThemedText>
+            <MaterialIcons name="thermostat" size={24} color={EcoColors.error} style={styles.cardIcon} />
+            <ThemedText style={styles.cardSubtitle}>Temp</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText type="displaySmall" style={styles.cardValue}>{data.temp}°C</ThemedText>
+             <ThemedText style={styles.cardValue}>{data.temp}°C</ThemedText>
           </View>
         </View>
 
         {/* Humidity Card */}
-        <View style={[styles.bentoCard, { backgroundColor: '#e9f0e1' }]}>
+        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainer }]}>
           <View>
-            <MaterialIcons name="water" size={24} color="#286b33" style={styles.cardIcon} />
-            <ThemedText type="labelSmall" style={styles.cardSubtitle}>Humidity</ThemedText>
+            <MaterialIcons name="waves" size={24} color={EcoColors.secondary} style={styles.cardIcon} />
+            <ThemedText style={styles.cardSubtitle}>Humidity</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText type="displaySmall" style={styles.cardValue}>{data.humidity}%</ThemedText>
+             <ThemedText style={styles.cardValue}>{data.humidity}%</ThemedText>
           </View>
         </View>
 
         {/* Batería de Panel Card */}
-        <View style={[styles.bentoCard, { backgroundColor: '#eff6e7' }]}>
+        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerLow }]}>
           <View>
-            <MaterialIcons name="solar-power" size={24} color="#206223" style={styles.cardIcon} />
-            <ThemedText type="labelSmall" style={styles.cardSubtitle}>Batería de Panel</ThemedText>
+            <MaterialIcons name="solar-power" size={24} color={EcoColors.primary} style={styles.cardIcon} />
+            <ThemedText style={styles.cardSubtitle}>Batería de Panel</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText type="displaySmall" style={styles.cardValue}>{data.batPanel}%</ThemedText>
+             <ThemedText style={styles.cardValue}>{data.batPanel}%</ThemedText>
           </View>
         </View>
 
         {/* Batería de Sistema Card */}
-        <View style={[styles.bentoCard, { backgroundColor: '#dee5d6' }]}>
+        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerHighest }]}>
           <View>
-            <MaterialIcons name="battery-full" size={24} color="#325c5a" style={styles.cardIcon} />
-            <ThemedText type="labelSmall" style={styles.cardSubtitle}>Batería de Sistema</ThemedText>
+            <MaterialIcons name="battery-full" size={24} color={EcoColors.tertiary} style={styles.cardIcon} />
+            <ThemedText style={styles.cardSubtitle}>Batería de Sistema</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText type="displaySmall" style={styles.cardValue}>{data.batSys}%</ThemedText>
+             <ThemedText style={styles.cardValue}>{data.batSys}%</ThemedText>
           </View>
         </View>
 
@@ -244,7 +245,8 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
   },
   cardValue: {
-    fontWeight: '900',
+    fontFamily: 'Manrope_800ExtraBold',
+    fontSize: 32,
     color: '#171d14',
     letterSpacing: -1,
   },

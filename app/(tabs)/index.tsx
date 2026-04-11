@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { ThemedText } from '@/components/themed-text';
 import { PlantHealthCard } from '@/components/PlantHealthCard';
 import { EcoColors } from '@/constants/theme';
 import { getDb } from '@/db';
 
+const { width } = Dimensions.get('window');
+
 export default function DashboardScreen() {
   const [metrics, setMetrics] = useState<any>(null);
-  const [lastEvent, setLastEvent] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
     const db = getDb();
@@ -20,7 +23,7 @@ export default function DashboardScreen() {
     if (latestMetrics) {
       setMetrics({
         hydration: latestMetrics.hydration,
-        light: latestMetrics.exposure * 300, // Simulated LUX conversion for display
+        light: latestMetrics.exposure * 300, 
         temp: latestMetrics.temperature,
         humidity: latestMetrics.humidity,
         batPanel: latestMetrics.battery_panel,
@@ -28,61 +31,72 @@ export default function DashboardScreen() {
       });
     }
 
-    // Fetch latest history event
-    const event = db.getFirstSync<any>('SELECT * FROM history ORDER BY created_at DESC LIMIT 1');
-    setLastEvent(event);
+    // Fetch latest 3 history events for timeline
+    const events = db.getAllSync<any>('SELECT * FROM history ORDER BY created_at DESC LIMIT 3');
+    setHistory(events);
   }, []);
 
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase();
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <ThemedText type="labelMedium" style={styles.greeting}>BUEN DÍA, BOTÁNICO</ThemedText>
-            <ThemedText type="headlineMedium" style={styles.title}>Tu Ecosistema</ThemedText>
+    <View style={styles.container}>
+      {/* Top Bar (Fixed) */}
+      <SafeAreaView edges={['top']} style={styles.topBar}>
+        <View style={styles.headerContent}>
+          <View style={styles.logoContainer}>
+            <MaterialIcons name="local-florist" size={24} color={EcoColors.primary} />
+            <ThemedText style={styles.headerTitle}>Digital Garden</ThemedText>
           </View>
-          <TouchableOpacity style={styles.avatar}>
-            <MaterialIcons name="person" size={24} color={EcoColors.onSurface} />
+          <TouchableOpacity style={styles.iconButton}>
+             <MaterialIcons name="bluetooth-connected" size={22} color={EcoColors.outline} />
           </TouchableOpacity>
         </View>
+      </SafeAreaView>
 
-        {/* Primary Plant Health Card */}
-        <View style={styles.primaryCardContainer}>
-          <PlantHealthCard metrics={metrics} />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Plant Hero Card + Metrics Grid (Consolidated in Component) */}
+        <PlantHealthCard metrics={metrics} />
+
+        {/* Recent Growth Section */}
+        <View style={styles.timelineSection}>
+          <ThemedText style={styles.timelineTitle}>Recent Growth</ThemedText>
+          
+          <View style={styles.timelineWrapper}>
+             {/* Vertical Track */}
+             <View style={styles.timelineTrack} />
+             
+             {history.map((item, index) => (
+                <View key={item.id || index} style={styles.timelineNode}>
+                  <View style={[
+                    styles.nodeDot, 
+                    index === 2 ? { backgroundColor: EcoColors.outlineVariant, opacity: 0.6 } : {}
+                  ]} />
+                  <View style={[styles.nodeContent, index === 2 ? { opacity: 0.6 } : {}]}>
+                    <ThemedText style={styles.nodeDate}>{formatDate(item.created_at)}</ThemedText>
+                    <ThemedText style={styles.nodeAction}>{item.action}</ThemedText>
+                  </View>
+                </View>
+             ))}
+          </View>
         </View>
-
-        {/* Secondary Dashboard Cards (Asymmetrical layout) */}
-        <View style={styles.secondaryCardsGrid}>
-          {/* Latest Event Card */}
-          <TouchableOpacity 
-            activeOpacity={0.9} 
-            style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerLow, flex: 2 }]}
-          >
-            <View style={styles.cardHeader}>
-              <MaterialIcons name="history" size={20} color={EcoColors.tertiary} />
-              <ThemedText style={styles.cardLabel}>ÚLTIMO EVENTO</ThemedText>
-            </View>
-            <ThemedText style={styles.cardTitle}>{lastEvent?.action || 'Sin eventos'}</ThemedText>
-            <ThemedText style={styles.cardDesc} numberOfLines={2}>
-              {lastEvent?.details || 'Día tranquilo en el huerto.'}
-            </ThemedText>
-          </TouchableOpacity>
-
-          {/* Quick Action Card */}
-          <TouchableOpacity 
-            activeOpacity={0.9} 
-            style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerHigh, flex: 1.2 }]}
-          >
-            <View style={styles.iconCircle}>
-              <MaterialIcons name="add" size={20} color={EcoColors.primary} />
-            </View>
-            <ThemedText style={styles.actionTitle}>Añadir Planta</ThemedText>
-          </TouchableOpacity>
-        </View>
-        
       </ScrollView>
-    </SafeAreaView>
+
+      {/* FAB: Water Now */}
+      <TouchableOpacity activeOpacity={0.85} style={styles.fab}>
+        <LinearGradient
+          colors={[EcoColors.primary, '#3a7b3a']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabGradient}
+        >
+          <MaterialIcons name="water-drop" size={20} color="white" />
+          <ThemedText style={styles.fabText}>Water Now</ThemedText>
+        </LinearGradient>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -91,92 +105,119 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: EcoColors.background,
   },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 120, // Extra space for floating tab bar
+  topBar: {
+    backgroundColor: '#eff6e7',
+    zIndex: 10,
   },
-  header: {
+  headerContent: {
+    height: 64,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32,
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
   },
-  greeting: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    color: '#707a6c',
-    letterSpacing: 1.5,
-    marginBottom: 4,
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  title: {
+  headerTitle: {
     fontFamily: 'Manrope_800ExtraBold',
-    fontSize: 30,
-    color: '#206223',
+    fontSize: 22,
+    color: EcoColors.primary,
     letterSpacing: -1,
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: EcoColors.surfaceContainerHighest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryCardContainer: {
-    marginBottom: 16,
-  },
-  secondaryCardsGrid: {
-    flexDirection: 'row',
-    gap: 16,
-    height: 140,
-  },
-  bentoCard: {
-    borderRadius: 28,
-    padding: 20,
-    justifyContent: 'space-between',
-    shadowColor: '#171d14',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  cardLabel: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#707a6c',
-    letterSpacing: 0.5,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontFamily: 'Manrope_800ExtraBold',
-    color: '#171d14',
-    marginBottom: 4,
-  },
-  cardDesc: {
-    fontSize: 12,
-    color: '#40493d',
-    lineHeight: 18,
-    opacity: 0.8,
-  },
-  iconCircle: {
+  iconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(32, 98, 35, 0.1)',
+    backgroundColor: 'rgba(112, 122, 108, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
   },
-  actionTitle: {
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 160, // Extra space for FAB and Navbar
+  },
+  timelineSection: {
+    marginTop: 40,
+    paddingHorizontal: 8,
+  },
+  timelineTitle: {
+    fontFamily: 'Manrope_700Bold',
+    fontSize: 20,
+    color: '#171d14',
+    marginBottom: 24,
+  },
+  timelineWrapper: {
+    paddingLeft: 24,
+    position: 'relative',
+  },
+  timelineTrack: {
+    position: 'absolute',
+    left: 3,
+    top: 6,
+    bottom: 6,
+    width: 2,
+    backgroundColor: EcoColors.outlineVariant,
+    opacity: 0.3,
+  },
+  timelineNode: {
+    position: 'relative',
+    marginBottom: 32,
+  },
+  nodeDot: {
+    position: 'absolute',
+    left: -27,
+    top: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: EcoColors.primary,
+    borderWidth: 3,
+    borderColor: EcoColors.background,
+  },
+  nodeContent: {
+    flex: 1,
+  },
+  nodeDate: {
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    color: '#707a6c',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  nodeAction: {
+    fontSize: 15,
+    fontFamily: 'Inter_500Medium',
+    color: '#171d14',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 110, // Adjusted for tab bar
+    right: 24,
+    zIndex: 50,
+    borderRadius: 24,
+    shadowColor: '#206223',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  fabGradient: {
+    height: 60,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  fabText: {
+    color: 'white',
+    fontFamily: 'Manrope_700Bold',
     fontSize: 14,
-    fontFamily: 'Manrope_800ExtraBold',
-    color: '#206223',
+    letterSpacing: 0.5,
   },
 });
