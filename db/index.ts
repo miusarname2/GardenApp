@@ -37,6 +37,22 @@ export function setupDatabase() {
       );
     `);
     
+    // Migrations: Add new columns if they don't exist (prevents NPE in prepareSync)
+    const columns = [
+      { name: 'temperature', type: 'REAL' },
+      { name: 'humidity', type: 'INTEGER' },
+      { name: 'battery_panel', type: 'INTEGER' },
+      { name: 'battery_system', type: 'INTEGER' }
+    ];
+
+    columns.forEach(col => {
+      try {
+        db.execSync(`ALTER TABLE metrics ADD COLUMN ${col.name} ${col.type};`);
+      } catch (e) {
+        // Column probably already exists, which is fine
+      }
+    });
+    
     // Check if seeded
     const historyCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM history');
     const metricsCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM metrics');

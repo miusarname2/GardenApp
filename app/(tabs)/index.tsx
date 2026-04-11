@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { PlantHealthCard } from '@/components/PlantHealthCard';
@@ -50,7 +51,7 @@ export default function DashboardScreen() {
             <MaterialIcons name="local-florist" size={24} color={EcoColors.primary} />
             <ThemedText style={styles.headerTitle}>Digital Garden</ThemedText>
           </View>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/settings')}>
              <MaterialIcons name="bluetooth-connected" size={22} color={EcoColors.outline} />
           </TouchableOpacity>
         </View>

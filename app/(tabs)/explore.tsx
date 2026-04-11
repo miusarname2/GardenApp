@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { getDb } from '@/db';
@@ -99,7 +100,7 @@ export default function ExploreScreen() {
           <MaterialIcons name="eco" size={24} color="#2e7d32" />
           <ThemedText style={styles.headerTitle}>Historial</ThemedText>
         </View>
-        <TouchableOpacity style={styles.headerIconBtn}>
+        <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/settings')}>
           <MaterialIcons name="bluetooth-connected" size={24} color="#2e7d32" />
         </TouchableOpacity>
       </View>

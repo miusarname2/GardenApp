@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { router, useRootNavigationState } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupDatabase } from '../db';
 import 'react-native-reanimated';
@@ -21,6 +21,7 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const navigationState = useRootNavigationState();
 
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState<boolean | null>(null);
 
@@ -51,18 +52,15 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (manropeLoaded && interLoaded && isOnboardingCompleted !== null) {
+    if (manropeLoaded && interLoaded && isOnboardingCompleted !== null && navigationState?.key) {
       SplashScreen.hideAsync();
       
       // If onboarding is completed, redirect directly to tabs
       if (isOnboardingCompleted) {
-        // Use a short timeout to ensure the router is ready
-        setTimeout(() => {
-          router.replace('/(tabs)');
-        }, 0);
+        router.replace('/(tabs)');
       }
     }
-  }, [manropeLoaded, interLoaded, isOnboardingCompleted]);
+  }, [manropeLoaded, interLoaded, isOnboardingCompleted, navigationState?.key]);
 
   if (!manropeLoaded || !interLoaded || isOnboardingCompleted === null) {
     return null;
