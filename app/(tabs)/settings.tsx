@@ -1,5 +1,14 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { 
+  StyleSheet, 
+  View, 
+  ScrollView, 
+  TouchableOpacity, 
+  Dimensions, 
+  Linking, 
+  Platform, 
+  PermissionsAndroid 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +20,7 @@ import Animated, {
   withDelay,
   Easing 
 } from 'react-native-reanimated';
+import { BleManager, Device } from 'react-native-ble-plx';
 
 import { ThemedText } from '@/components/themed-text';
 import { EcoColors } from '@/constants/theme';
@@ -43,6 +53,99 @@ const PulseCircle = ({ delay = 0 }: { delay?: number }) => {
 };
 
 export default function SettingsScreen() {
+  const [isScanning, setIsScanning] = useState(false);
+  const [devices, setDevices] = useState<Record<string, Device>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 6;
+  
+  const manager = useMemo(() => new BleManager(), []);
+  const scanTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const requestPermissions = async () => {
+    if (Platform.OS === 'android') {
+      if (Platform.Version >= 31) {
+        const result = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        ]);
+        return (
+          result['android.permission.BLUETOOTH_SCAN'] === PermissionsAndroid.RESULTS.GRANTED &&
+          result['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED &&
+          result['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+        );
+      } else {
+        const result = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+        );
+        return result === PermissionsAndroid.RESULTS.GRANTED;
+      }
+    }
+    return true; // iOS handles it via Info.plist / user prompt on first scan
+  };
+
+  const startScan = async () => {
+    if (isScanning) return;
+
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) {
+      console.warn('Bluetooth permissions denied');
+      return;
+    }
+
+    setIsScanning(true);
+    setDevices({}); // Clear previous list
+    setCurrentPage(1); // Reset pagination
+
+    manager.startDeviceScan(null, null, (error, device) => {
+      if (error) {
+        console.warn('Scan error:', error);
+        setIsScanning(false);
+        return;
+      }
+
+      if (device) {
+        setDevices(prev => ({
+          ...prev,
+          [device.id]: device
+        }));
+      }
+    });
+
+    // Stop scan after 10 seconds
+    if (scanTimeout.current) clearTimeout(scanTimeout.current);
+    scanTimeout.current = setTimeout(() => {
+      stopScan();
+    }, 10000);
+  };
+
+  const stopScan = () => {
+    manager.stopDeviceScan();
+    setIsScanning(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      manager.stopDeviceScan();
+      manager.destroy();
+      if (scanTimeout.current) clearTimeout(scanTimeout.current);
+    };
+  }, [manager]);
+
+  const sortedDevices = Object.values(devices).sort((a, b) => (b.rssi || -100) - (a.rssi || -100));
+  
+  // Pagination logic
+  const totalPages = Math.ceil(sortedDevices.length / PAGE_SIZE);
+  const paginatedDevices = sortedDevices.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const openTutorial = () => {
+    Linking.openURL('https://www.youtube.com/watch?v=VkLqKcg0EKk&list=RDExQuH5lYi-E&index=8');
+  };
+
+  const openManual = () => {
+    Linking.openURL('https://ontheline.trincoll.edu/images/bookdown/sample-local-pdf.pdf');
+  };
+
   return (
     <View style={styles.container}>
       {/* TopAppBar */}
@@ -52,7 +155,7 @@ export default function SettingsScreen() {
             <MaterialIcons name="local-florist" size={24} color={EcoColors.primary} />
             <ThemedText style={styles.headerTitle}>Conectar Huerto</ThemedText>
           </View>
-          <TouchableOpacity style={styles.headerIconButton}>
+          <TouchableOpacity style={styles.headerIconButton} onPress={() => manager.state().then(s => console.log('BLE State:', s))}>
             <MaterialIcons name="bluetooth-connected" size={24} color={EcoColors.primary} />
           </TouchableOpacity>
         </View>
@@ -62,20 +165,28 @@ export default function SettingsScreen() {
         {/* Connection Visualizer */}
         <View style={styles.visualizerSection}>
           <View style={styles.pulseContainer}>
-            <PulseCircle delay={0} />
-            <PulseCircle delay={1000} />
-            <TouchableOpacity activeOpacity={0.9} style={styles.scannerDisk}>
+            {isScanning && (
+              <>
+                <PulseCircle delay={0} />
+                <PulseCircle delay={1000} />
+              </>
+            )}
+            <TouchableOpacity 
+              activeOpacity={0.9} 
+              style={styles.scannerDisk} 
+              onPress={isScanning ? stopScan : startScan}
+            >
               <LinearGradient
-                colors={[EcoColors.primary, '#3a7b3a']}
+                colors={isScanning ? ['#3a7b3a', EcoColors.primary] : [EcoColors.primary, '#3a7b3a']}
                 style={styles.scannerGradient}
               >
-                <MaterialIcons name="bluetooth-searching" size={40} color="white" />
+                <MaterialIcons name={isScanning ? "bluetooth-audio" : "bluetooth-searching"} size={40} color="white" />
               </LinearGradient>
-              <ThemedText style={styles.scannerStatus}>Buscando...</ThemedText>
+              <ThemedText style={styles.scannerStatus}>{isScanning ? 'Detener' : 'Buscando...'}</ThemedText>
             </TouchableOpacity>
           </View>
           <ThemedText style={styles.scannerInstructions}>
-            Asegúrate de que tu sensor esté encendido
+            {isScanning ? 'Escaneando dispositivos cercanos...' : 'Asegúrate de que tu sensor esté encendido'}
           </ThemedText>
         </View>
 
@@ -84,62 +195,56 @@ export default function SettingsScreen() {
           <View style={styles.sectionHeader}>
             <ThemedText style={styles.sectionTitle}>Dispositivos Cerca</ThemedText>
             <View style={styles.countBadge}>
-              <ThemedText style={styles.countText}>3 encontrados</ThemedText>
+              <ThemedText style={styles.countText}>{sortedDevices.length} encontrados</ThemedText>
             </View>
           </View>
 
           <View style={styles.deviceList}>
-            {/* Device 1 */}
-            <TouchableOpacity style={[styles.deviceCard, styles.deviceCardActive]}>
-              <View style={styles.deviceInfo}>
-                <View style={styles.deviceIconContainer}>
-                  <MaterialIcons name="sensors" size={24} color={EcoColors.primary} />
-                </View>
-                <View>
-                  <ThemedText style={styles.deviceName}>Huerto_Frontal_01</ThemedText>
-                  <ThemedText style={styles.deviceStatus}>Estado: Disponible</ThemedText>
-                </View>
-              </View>
-              <View style={styles.deviceAction}>
-                 <SignalBars level={4} color={EcoColors.primary} />
-                 <MaterialIcons name="chevron-right" size={24} color={EcoColors.outline} />
-              </View>
-            </TouchableOpacity>
+            {sortedDevices.length === 0 && !isScanning && (
+              <ThemedText style={styles.emptyText}>Presiona el círculo para buscar sensores.</ThemedText>
+            )}
 
-            {/* Device 2 */}
-            <TouchableOpacity style={styles.deviceCard}>
-              <View style={styles.deviceInfo}>
-                <View style={styles.deviceIconContainer}>
-                  <MaterialIcons name="eco" size={24} color={EcoColors.outline} />
+            {paginatedDevices.map((device, index) => (
+              <TouchableOpacity key={device.id} style={[styles.deviceCard, index === 0 && currentPage === 1 && styles.deviceCardActive]}>
+                <View style={styles.deviceInfo}>
+                  <View style={styles.deviceIconContainer}>
+                    <MaterialIcons name={device.name ? "sensors" : "bluetooth"} size={24} color={device.name ? EcoColors.primary : EcoColors.outline} />
+                  </View>
+                  <View>
+                    <ThemedText style={styles.deviceName}>{device.name || 'Sensor sin nombre'}</ThemedText>
+                    <ThemedText style={styles.deviceStatus}>ID: {device.id}</ThemedText>
+                  </View>
                 </View>
-                <View>
-                  <ThemedText style={styles.deviceName}>Invernadero_S2</ThemedText>
-                  <ThemedText style={styles.deviceStatus}>Estado: Disponible</ThemedText>
+                <View style={styles.deviceAction}>
+                   <SignalBars level={Math.max(1, Math.min(4, Math.floor((100 + (device.rssi || -100)) / 15)))} color={EcoColors.primary} />
+                   <MaterialIcons name="chevron-right" size={24} color={EcoColors.outline} />
                 </View>
-              </View>
-              <View style={styles.deviceAction}>
-                 <SignalBars level={2} color={EcoColors.primary} />
-                 <MaterialIcons name="chevron-right" size={24} color={EcoColors.outline} />
-              </View>
-            </TouchableOpacity>
-
-            {/* Device 3 */}
-            <View style={[styles.deviceCard, { opacity: 0.6 }]}>
-              <View style={styles.deviceInfo}>
-                <View style={styles.deviceIconContainer}>
-                  <MaterialIcons name="router" size={24} color={EcoColors.outline} />
-                </View>
-                <View>
-                  <ThemedText style={styles.deviceName}>Central_Hub_99</ThemedText>
-                  <ThemedText style={styles.deviceStatus}>Señal débil</ThemedText>
-                </View>
-              </View>
-              <View style={styles.deviceAction}>
-                 <SignalBars level={1} color={EcoColors.error} />
-                 <MaterialIcons name="lock" size={20} color={EcoColors.outline} />
-              </View>
-            </View>
+              </TouchableOpacity>
+            ))}
           </View>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <View style={styles.paginationRow}>
+              <TouchableOpacity 
+                disabled={currentPage === 1} 
+                onPress={() => setCurrentPage(prev => prev - 1)}
+                style={[styles.pageBtn, currentPage === 1 && { opacity: 0.3 }]}
+              >
+                <MaterialIcons name="navigate-before" size={24} color={EcoColors.primary} />
+              </TouchableOpacity>
+              <ThemedText style={styles.pageIndicator}>
+                Página {currentPage} de {totalPages}
+              </ThemedText>
+              <TouchableOpacity 
+                disabled={currentPage === totalPages} 
+                onPress={() => setCurrentPage(prev => prev + 1)}
+                style={[styles.pageBtn, currentPage === totalPages && { opacity: 0.3 }]}
+              >
+                <MaterialIcons name="navigate-next" size={24} color={EcoColors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Connectivity Guide */}
@@ -154,10 +259,10 @@ export default function SettingsScreen() {
                 Asegúrate de que el sensor Bluetooth LE esté a menos de 2 metros del dispositivo móvil.
               </ThemedText>
               <View style={styles.guideButtons}>
-                <TouchableOpacity style={styles.guideMainBtn}>
+                <TouchableOpacity style={styles.guideMainBtn} onPress={openTutorial}>
                   <ThemedText style={styles.guideMainBtnText}>Ver tutorial</ThemedText>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.guideSecondaryBtn}>
+                <TouchableOpacity style={styles.guideSecondaryBtn} onPress={openManual}>
                   <MaterialIcons name="description" size={16} color={EcoColors.onTertiaryFixed} />
                   <ThemedText style={styles.guideSecondaryBtnText}>Manual de Usuario</ThemedText>
                 </TouchableOpacity>
@@ -227,7 +332,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 24,
-    paddingBottom: 120,
+    paddingBottom: 150,
   },
   visualizerSection: {
     alignItems: 'center',
@@ -286,6 +391,7 @@ const styles = StyleSheet.create({
   },
   devicesSection: {
     marginTop: 24,
+    minHeight: 200,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -312,6 +418,12 @@ const styles = StyleSheet.create({
   deviceList: {
     gap: 16,
   },
+  emptyText: {
+    textAlign: 'center',
+    color: EcoColors.outline,
+    fontFamily: 'Inter_500Medium',
+    paddingVertical: 40,
+  },
   deviceCard: {
     backgroundColor: EcoColors.surfaceContainerLow,
     borderRadius: 24,
@@ -333,6 +445,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+    flex: 1,
   },
   deviceIconContainer: {
     width: 48,
@@ -344,12 +457,12 @@ const styles = StyleSheet.create({
   },
   deviceName: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
+    fontSize: 15,
     color: '#171d14',
   },
   deviceStatus: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 12,
+    fontSize: 10,
     color: EcoColors.outline,
   },
   deviceAction: {
@@ -366,6 +479,31 @@ const styles = StyleSheet.create({
   signalBar: {
     width: 4,
     borderRadius: 2,
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    gap: 16,
+  },
+  pageBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  pageIndicator: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: EcoColors.primary,
   },
   guideCard: {
     marginTop: 40,
