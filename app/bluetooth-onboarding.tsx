@@ -1,8 +1,10 @@
-import React, { useEffect } from 'react';
-import { View, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, ScrollView, SafeAreaView, Platform, PermissionsAndroid, TouchableOpacity } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withDelay, Easing, withSequence } from 'react-native-reanimated';
+import { BleManager, Device } from 'react-native-ble-plx';
+import * as ExpoDevice from 'expo-device';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/Button';
@@ -58,9 +60,95 @@ const PulseRing = ({ delay = 0, size = 300, color = EcoColors.primary + '20' }) 
   );
 };
 
+// Se instancia fuera o a nivel global (lo ideal es un Singleton/Context)
+const bleManager = new BleManager();
+
 export default function BluetoothOnboardingScreen() {
-  const handleConnect = () => {
-    // Connect logic
+  const [isScanning, setIsScanning] = useState(false);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Escaneo inicial automáticamente
+    startScan();
+    return () => {
+      bleManager.stopDeviceScan();
+    };
+  }, []);
+
+  const requestPermissions = async () => {
+    if (Platform.OS === 'android') {
+      if ((ExpoDevice.platformApiLevel ?? -1) < 31) {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } else {
+        const isScanGranted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        );
+        const isConnectGranted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        );
+        const isFineLocationGranted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        );
+        return (
+          isScanGranted === PermissionsAndroid.RESULTS.GRANTED &&
+          isConnectGranted === PermissionsAndroid.RESULTS.GRANTED &&
+          isFineLocationGranted === PermissionsAndroid.RESULTS.GRANTED
+        );
+      }
+    }
+    return true; // En iOS los permisos los pide automáticamente la librería nativa en info.plist
+  };
+
+  const startScan = async () => {
+    const isGranted = await requestPermissions();
+    if (!isGranted) {
+      console.warn('Permisos no concedidos');
+      return;
+    }
+
+    if (isScanning) return;
+
+    setIsScanning(true);
+    setDevices([]);
+    setSelectedDeviceId(null);
+
+    // Opcionalmente podemos filtrar por UUIDs, aquí pasamos `null` para detectar todo
+    bleManager.startDeviceScan(null, null, (error, device) => {
+      if (error) {
+        console.error('Error al escanear:', error);
+        setIsScanning(false);
+        return;
+      }
+
+      if (device && device.name) {
+        setDevices((prevDevices) => {
+          if (!prevDevices.find(d => d.id === device.id)) {
+            return [...prevDevices, device];
+          }
+          return prevDevices;
+        });
+      }
+    });
+
+    // Detener de forma automática luego de 15 segundos
+    setTimeout(() => {
+      bleManager.stopDeviceScan();
+      setIsScanning(false);
+    }, 15000);
+  };
+
+  const handleConnect = async () => {
+    if (!selectedDeviceId) return;
+    
+    bleManager.stopDeviceScan();
+    setIsScanning(false);
+    
+    // Aquí puedes añadir logic tipo `await bleManager.connectToDevice(selectedDeviceId)`
+    // Para prototipo, saltamos al (tabs) directamente asumiendo conexión existosa
     router.replace('/(tabs)');
   };
 
@@ -92,7 +180,7 @@ export default function BluetoothOnboardingScreen() {
           <View style={styles.heroTextContainer}>
             <ThemedText type="headlineLarge" style={styles.heroTitle}>Buscando sensores</ThemedText>
             <ThemedText type="labelMedium" style={styles.heroSubtitle}>
-              Asegúrate de que tu sensor esté encendido y cerca
+              ASEGÚRATE DE QUE TU SENSOR ESTÉ ENCENDIDO Y CERCA
             </ThemedText>
           </View>
         </View>
@@ -100,52 +188,58 @@ export default function BluetoothOnboardingScreen() {
         {/* Devices List */}
         <View style={styles.devicesSection}>
           <View style={styles.devicesHeader}>
-            <ThemedText type="labelSmall" style={styles.devicesTitle}>Dispositivos encontrados</ThemedText>
-            <View style={styles.pulseIndicator} />
+            <ThemedText type="labelSmall" style={styles.devicesTitle}>DISPOSITIVOS ENCONTRADOS</ThemedText>
+            {isScanning && <View style={styles.pulseIndicator} />}
           </View>
 
           <View style={styles.deviceList}>
-            {/* Device Item 1 (Selected/Active) */}
-            <View style={[styles.deviceItem, styles.deviceItemSelected]}>
-              <View style={styles.deviceItemContent}>
-                <View style={[styles.deviceIcon, { backgroundColor: EcoColors.primaryContainer + '20' }]}>
-                  <MaterialIcons name="grass" size={24} color={EcoColors.primary} />
-                </View>
-                <View>
-                  <ThemedText type="titleMedium" style={{ fontWeight: 'bold' }}>Sensor Huerto A1</ThemedText>
-                  <ThemedText type="labelSmall" style={{ color: EcoColors.outline }}>Señal fuerte • 1.2m de distancia</ThemedText>
-                </View>
-              </View>
-              <View style={styles.checkIcon}>
-                <MaterialIcons name="check" size={16} color={EcoColors.onPrimary} />
-              </View>
-            </View>
+            {devices.map((device) => {
+              const isSelected = selectedDeviceId === device.id;
+              
+              return (
+                <TouchableOpacity 
+                  key={device.id} 
+                  activeOpacity={0.8}
+                  onPress={() => setSelectedDeviceId(device.id)}
+                  style={[styles.deviceItem, isSelected && styles.deviceItemSelected]}
+                >
+                  <View style={styles.deviceItemContent}>
+                    <View style={[styles.deviceIcon, { backgroundColor: isSelected ? EcoColors.primaryContainer + '20' : EcoColors.surfaceContainerHighest + '50' }]}>
+                      <MaterialIcons name={device.name?.toLowerCase().includes('sensor') ? 'grass' : 'sensors'} size={24} color={isSelected ? EcoColors.primary : EcoColors.outline} />
+                    </View>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <ThemedText type="titleMedium" style={{ fontWeight: 'bold' }} numberOfLines={1}>{device.name}</ThemedText>
+                      <ThemedText type="labelSmall" style={{ color: EcoColors.outline }}>Señal: {device.rssi ?? 'N/A'} dBm</ThemedText>
+                    </View>
+                  </View>
+                  {isSelected ? (
+                    <View style={styles.checkIcon}>
+                      <MaterialIcons name="check" size={16} color={EcoColors.onPrimary} />
+                    </View>
+                  ) : (
+                    <MaterialIcons name="chevron-right" size={24} color={EcoColors.outlineVariant} />
+                  )}
+                </TouchableOpacity>
+              )
+            })}
 
-            {/* Device Item 2 */}
-            <View style={styles.deviceItem}>
-              <View style={styles.deviceItemContent}>
-                <View style={[styles.deviceIcon, { backgroundColor: EcoColors.surfaceContainerHighest + '50' }]}>
-                  <MaterialIcons name="park" size={24} color={EcoColors.outline} />
-                </View>
-                <View>
-                  <ThemedText type="titleMedium" style={{ fontWeight: 'bold' }}>Garden Hub X</ThemedText>
-                  <ThemedText type="labelSmall" style={{ color: EcoColors.outline }}>Señal media • 4.5m de distancia</ThemedText>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={EcoColors.outlineVariant} />
-            </View>
-
-            {/* Device Item 3 (Ghost) */}
-            <View style={[styles.deviceItem, styles.deviceItemGhost]}>
-              <View style={styles.deviceItemContent}>
-                <View style={[styles.deviceIcon, { backgroundColor: EcoColors.surfaceContainerHighest + '20' }]}>
-                  <MaterialIcons name="sensors" size={24} color={EcoColors.outlineVariant} />
-                </View>
-                <View>
-                  <ThemedText type="titleMedium" style={{ fontWeight: 'bold', color: EcoColors.outline }}>Buscando otros...</ThemedText>
+            {/* Ghost Loading Item */}
+            {isScanning && (
+              <View style={[styles.deviceItem, styles.deviceItemGhost]}>
+                <View style={styles.deviceItemContent}>
+                  <View style={[styles.deviceIcon, { backgroundColor: EcoColors.surfaceContainerHighest + '20' }]}>
+                    <MaterialIcons name="sensors" size={24} color={EcoColors.outlineVariant} />
+                  </View>
+                  <View>
+                    <ThemedText type="titleMedium" style={{ fontWeight: 'bold', color: EcoColors.outline }}>Buscando otros...</ThemedText>
+                  </View>
                 </View>
               </View>
-            </View>
+            )}
+            
+            {!isScanning && devices.length === 0 && (
+              <ThemedText type="bodyMedium" style={{ textAlign: 'center', opacity: 0.5, marginTop: 12 }}>No se encontraron dispositivos cercanos</ThemedText>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -157,12 +251,14 @@ export default function BluetoothOnboardingScreen() {
           onPress={handleConnect}
           variant="primary"
           size="large"
-          style={{ marginBottom: 16 }}
+          disabled={!selectedDeviceId}
+          style={{ marginBottom: 16, opacity: !selectedDeviceId ? 0.6 : 1 }}
         />
         <Button
-          title="No veo mi dispositivo"
-          onPress={() => {}}
+          title="Buscar de nuevo"
+          onPress={startScan}
           variant="tertiary"
+          disabled={isScanning}
         />
       </View>
     </SafeAreaView>
@@ -262,7 +358,6 @@ const styles = StyleSheet.create({
     height: 8,
     backgroundColor: EcoColors.primary,
     borderRadius: 4,
-    // Add simple pulse animation if needed
   },
   deviceList: {
     gap: 16,
@@ -296,6 +391,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+    flex: 1,
   },
   deviceIcon: {
     width: 48,
