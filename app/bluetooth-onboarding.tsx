@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, SafeAreaView, Platform, PermissionsAndroid, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Platform, PermissionsAndroid, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withDelay, Easing, withSequence } from 'react-native-reanimated';
@@ -119,7 +120,11 @@ export default function BluetoothOnboardingScreen() {
     // Opcionalmente podemos filtrar por UUIDs, aquí pasamos `null` para detectar todo
     bleManager.startDeviceScan(null, null, (error, device) => {
       if (error) {
-        console.error('Error al escanear:', error);
+        if (error.message.includes('powered off')) {
+          console.warn('Bluetooth está apagado. Por favor, enciéndelo e intenta de nuevo.');
+        } else {
+          console.warn('Error al escanear:', error);
+        }
         setIsScanning(false);
         return;
       }
