@@ -42,46 +42,51 @@ export default function ExploreScreen() {
   useEffect(() => {
     const db = getDb();
     const fetchMetrics = () => {
-       // "Día" -> Últimos 7 días (Gráfico de barras)
-       // "Semana" -> Últimas 3-6 semanas (Gráfico de línea - pedimos últimos 30 días para trazar la curva)
-       const daysLimit = selectedRange === 'Día' ? 7 : 30;
-       const cutoff = new Date(Date.now() - (daysLimit * 24 * 60 * 60 * 1000)).toISOString();
-       
-       const metricsSql = `
-         SELECT AVG(hydration) as h, AVG(exposure) as e, MIN(growth_index) as min_g, MAX(growth_index) as max_g
-         FROM metrics
-         WHERE created_at >= ?
-       `;
-       const metricsRes = db.getFirstSync<any>(metricsSql, [cutoff]);
-       
-       if (metricsRes) {
-          const diff = ((metricsRes.max_g || 0) - (metricsRes.min_g || 0));
-          
-          setStats({
-            hydration: Math.round(metricsRes.h || 88),
-            exposure: Number((metricsRes.e || 6.2).toFixed(1)),
-            growthDiff: Number(diff.toFixed(1)) || 1.2,
-          });
+       try {
+         const db = getDb();
+         // "Día" -> Últimos 7 días (Gráfico de barras)
+         // "Semana" -> Últimas 3-6 semanas (Gráfico de línea - pedimos últimos 30 días para trazar la curva)
+         const daysLimit = selectedRange === 'Día' ? 7 : 30;
+         const cutoff = new Date(Date.now() - (daysLimit * 24 * 60 * 60 * 1000)).toISOString();
+         
+         const metricsSql = `
+           SELECT AVG(hydration) as h, AVG(exposure) as e, MIN(growth_index) as min_g, MAX(growth_index) as max_g
+           FROM metrics
+           WHERE created_at >= ?
+         `;
+         const metricsRes = db.getFirstSync<any>(metricsSql, [cutoff]);
+         
+         if (metricsRes) {
+            const diff = ((metricsRes.max_g || 0) - (metricsRes.min_g || 0));
+            
+            setStats({
+              hydration: Math.round(metricsRes.h || 88),
+              exposure: Number((metricsRes.e || 6.2).toFixed(1)),
+              growthDiff: Number(diff.toFixed(1)) || 1.2,
+            });
+         }
+
+         const eventsSql = `
+           SELECT * FROM history
+           WHERE created_at >= ?
+           ORDER BY created_at DESC
+         `;
+         const eventsRes = db.getAllSync<any>(eventsSql, [cutoff]);
+         setEvents(eventsRes);
+
+         const chartSql = `
+           SELECT created_at, growth_index 
+           FROM metrics 
+           WHERE created_at >= ? 
+           ORDER BY created_at ASC
+         `;
+         const chartRes = db.getAllSync<any>(chartSql, [cutoff]);
+         
+         // Filter empty arrays to at least have a flatline prevent crash
+         setChartData(chartRes.length > 0 ? chartRes : [{ growth_index: 0 }, { growth_index: 1 }]);
+       } catch (error) {
+         console.warn('Explore DB Error:', error);
        }
-
-       const eventsSql = `
-         SELECT * FROM history
-         WHERE created_at >= ?
-         ORDER BY created_at DESC
-       `;
-       const eventsRes = db.getAllSync<any>(eventsSql, [cutoff]);
-       setEvents(eventsRes);
-
-       const chartSql = `
-         SELECT created_at, growth_index 
-         FROM metrics 
-         WHERE created_at >= ? 
-         ORDER BY created_at ASC
-       `;
-       const chartRes = db.getAllSync<any>(chartSql, [cutoff]);
-       
-       // Filter empty arrays to at least have a flatline prevent crash
-       setChartData(chartRes.length > 0 ? chartRes : [{ growth_index: 0 }, { growth_index: 1 }]);
     };
 
     fetchMetrics();

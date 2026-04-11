@@ -36,10 +36,10 @@ export default function RootLayout() {
     Inter_600SemiBold,
   });
 
+  // Setup Local DB synchronously during render to ensure children find it ready
+  setupDatabase();
+
   useEffect(() => {
-    // Setup Local DB
-    setupDatabase();
-    
     async function checkOnboarding() {
       try {
         const value = await AsyncStorage.getItem('isOnboardingCompleted');

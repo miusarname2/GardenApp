@@ -17,24 +17,29 @@ export default function DashboardScreen() {
   const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
-    const db = getDb();
-    
-    // Fetch latest metrics
-    const latestMetrics = db.getFirstSync<any>('SELECT * FROM metrics ORDER BY created_at DESC LIMIT 1');
-    if (latestMetrics) {
-      setMetrics({
-        hydration: latestMetrics.hydration,
-        light: latestMetrics.exposure * 300, 
-        temp: latestMetrics.temperature,
-        humidity: latestMetrics.humidity,
-        batPanel: latestMetrics.battery_panel,
-        batSys: latestMetrics.battery_system
-      });
-    }
+    try {
+      const db = getDb();
+      
+      // Fetch latest metrics
+      const latestMetrics = db.getFirstSync<any>('SELECT * FROM metrics ORDER BY created_at DESC LIMIT 1');
+      if (latestMetrics) {
+        setMetrics({
+          hydration: latestMetrics.hydration,
+          light: latestMetrics.exposure * 300, 
+          temp: latestMetrics.temperature,
+          humidity: latestMetrics.humidity,
+          batPanel: latestMetrics.battery_panel,
+          batSys: latestMetrics.battery_system
+        });
+      }
 
-    // Fetch latest 3 history events for timeline
-    const events = db.getAllSync<any>('SELECT * FROM history ORDER BY created_at DESC LIMIT 3');
-    setHistory(events);
+      // Fetch latest 3 history events for timeline
+      const events = db.getAllSync<any>('SELECT * FROM history ORDER BY created_at DESC LIMIT 3');
+      setHistory(events);
+    } catch (error) {
+       console.warn('Dashboard DB Error:', error);
+       // Falls back to initial state
+    }
   }, []);
 
   const formatDate = (dateStr: string) => {

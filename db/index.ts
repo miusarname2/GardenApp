@@ -4,41 +4,41 @@ export function setupDatabase() {
   try {
     const db = SQLite.openDatabaseSync('garden.db');
     
-    // Create basic tables for future use (Sensors and History)
-    db.execSync(`
-      CREATE TABLE IF NOT EXISTS sensors (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        mac_address TEXT UNIQUE,
-        last_humidity INTEGER,
-        last_temperature INTEGER,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE TABLE IF NOT EXISTS history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sensor_id INTEGER,
-        action TEXT,
-        details TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS metrics (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sensor_id INTEGER,
-        hydration INTEGER,
-        exposure REAL,
-        growth_index REAL,
-        temperature REAL,
-        humidity INTEGER,
-        battery_panel INTEGER,
-        battery_system INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+    // Create tables atomically
+    db.execSync(`CREATE TABLE IF NOT EXISTS sensors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      mac_address TEXT UNIQUE,
+      last_humidity INTEGER,
+      last_temperature INTEGER,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );`);
     
-    // Migrations: Add new columns if they don't exist (prevents NPE in prepareSync)
+    db.execSync(`CREATE TABLE IF NOT EXISTS history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sensor_id INTEGER,
+      action TEXT,
+      details TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );`);
+
+    db.execSync(`CREATE TABLE IF NOT EXISTS metrics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sensor_id INTEGER,
+      hydration INTEGER,
+      exposure REAL,
+      growth_index REAL,
+      temperature REAL,
+      humidity INTEGER,
+      battery_panel INTEGER,
+      battery_system INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );`);
+    
+    // Migrations: Add new columns if they don't exist
     const columns = [
+      { name: 'exposure', type: 'REAL' },
+      { name: 'growth_index', type: 'REAL' },
       { name: 'temperature', type: 'REAL' },
       { name: 'humidity', type: 'INTEGER' },
       { name: 'battery_panel', type: 'INTEGER' },
@@ -48,23 +48,28 @@ export function setupDatabase() {
     columns.forEach(col => {
       try {
         db.execSync(`ALTER TABLE metrics ADD COLUMN ${col.name} ${col.type};`);
+        console.log(`Migrated column: ${col.name}`);
       } catch (e) {
-        // Column probably already exists, which is fine
+        // Ignored if column exists
       }
     });
     
     // Check if seeded
-    const historyCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM history');
-    const metricsCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM metrics');
+    try {
+      const historyCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM history');
+      const metricsCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM metrics');
 
-    if (historyCount?.count === 0 && metricsCount?.count === 0) {
-       console.log('Seeding SQLite mock data...');
-       seedDatabase(db);
+      if (historyCount?.count === 0 && metricsCount?.count === 0) {
+         console.log('Seeding SQLite mock data...');
+         seedDatabase(db);
+      }
+    } catch (e) {
+      console.warn('Error checking seed status:', e);
     }
     
     console.log('Local SQLite Database initialized successfully');
   } catch (error) {
-    console.warn('Error initializing database:', error);
+    console.warn('Critical error initializing database:', error);
   }
 }
 
