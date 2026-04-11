@@ -2,7 +2,10 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setupDatabase } from '../db';
 import 'react-native-reanimated';
 
 import { useFonts as useManrope, Manrope_400Regular, Manrope_600SemiBold, Manrope_800ExtraBold } from '@expo-google-fonts/manrope';
@@ -19,6 +22,8 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
+  const [isOnboardingCompleted, setIsOnboardingCompleted] = useState<boolean | null>(null);
+
   const [manropeLoaded] = useManrope({
     Manrope_400Regular,
     Manrope_600SemiBold,
@@ -31,12 +36,35 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (manropeLoaded && interLoaded) {
-      SplashScreen.hideAsync();
+    // Setup Local DB
+    setupDatabase();
+    
+    async function checkOnboarding() {
+      try {
+        const value = await AsyncStorage.getItem('isOnboardingCompleted');
+        setIsOnboardingCompleted(value === 'true');
+      } catch (e) {
+        setIsOnboardingCompleted(false);
+      }
     }
-  }, [manropeLoaded, interLoaded]);
+    checkOnboarding();
+  }, []);
 
-  if (!manropeLoaded || !interLoaded) {
+  useEffect(() => {
+    if (manropeLoaded && interLoaded && isOnboardingCompleted !== null) {
+      SplashScreen.hideAsync();
+      
+      // If onboarding is completed, redirect directly to tabs
+      if (isOnboardingCompleted) {
+        // Use a short timeout to ensure the router is ready
+        setTimeout(() => {
+          router.replace('/(tabs)');
+        }, 0);
+      }
+    }
+  }, [manropeLoaded, interLoaded, isOnboardingCompleted]);
+
+  if (!manropeLoaded || !interLoaded || isOnboardingCompleted === null) {
     return null;
   }
 

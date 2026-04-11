@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/Button';
 import { EcoColors } from '@/constants/theme';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PulseRing = ({ delay = 0, size = 300, color = EcoColors.primary + '20' }) => {
   const scale = useSharedValue(0.33);
@@ -151,6 +152,9 @@ export default function BluetoothOnboardingScreen() {
     
     bleManager.stopDeviceScan();
     setIsScanning(false);
+    
+    // Guardar que el onboarding fue completado
+    await AsyncStorage.setItem('isOnboardingCompleted', 'true');
     
     // Aquí puedes añadir logic tipo `await bleManager.connectToDevice(selectedDeviceId)`
     // Para prototipo, saltamos al (tabs) directamente asumiendo conexión existosa
