@@ -33,6 +33,7 @@ export default function ExploreScreen() {
   const [selectedRange, setSelectedRange] = useState<'Día' | 'Semana'>('Semana');
   const [stats, setStats] = useState({ hydration: 88, exposure: 6.2, growthDiff: 12.4 });
   const [events, setEvents] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
 
   useEffect(() => {
     const db = getDb();
@@ -65,6 +66,15 @@ export default function ExploreScreen() {
        `;
        const eventsRes = db.getAllSync<any>(eventsSql, [cutoff]);
        setEvents(eventsRes);
+
+       const chartSql = `
+         SELECT created_at, growth_index 
+         FROM metrics 
+         WHERE created_at >= ? 
+         ORDER BY created_at ASC
+       `;
+       const chartRes = db.getAllSync<any>(chartSql, [cutoff]);
+       setChartData(chartRes);
     };
 
     fetchMetrics();
@@ -136,9 +146,22 @@ export default function ExploreScreen() {
 
           {/* Conceptual Line Chart Box */}
           <View style={styles.chartArea}>
-             <LinearGradient
-                colors={['rgba(46, 125, 50, 0.15)', 'rgba(46, 125, 50, 0)']}
-                style={styles.chartGradientMock}
+             <Image 
+                source={{ uri: `data:image/svg+xml;utf8,${encodeURIComponent(`
+                  <svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox="0 0 100 100">
+                    <path d="M0,80 Q10,75 20,60 T40,65 T60,40 T80,30 T100,10" fill="none" stroke="#206223" stroke-linecap="round" stroke-width="3"></path>
+                    <path d="M0,80 Q10,75 20,60 T40,65 T60,40 T80,30 T100,10 V100 H0 Z" fill="url(#chart-grad)" opacity="0.15"></path>
+                    <defs>
+                      <linearGradient id="chart-grad" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stop-color="#206223"></stop>
+                        <stop offset="100%" stop-color="#206223" stop-opacity="0"></stop>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                `)}` }}
+                style={styles.chartSvgMock}
+                contentFit="fill"
+                transition={500}
              />
              <View style={styles.chartLabels}>
                 {selectedRange === 'Semana' ? (
@@ -368,7 +391,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   chartArea: {
-    height: 120,
+    height: 140,
     width: '100%',
     justifyContent: 'flex-end',
     position: 'relative',
@@ -377,6 +400,31 @@ const styles = StyleSheet.create({
   chartGradientMock: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 16,
+  },
+  chartBarsContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    width: '100%',
+    height: 100,
+    paddingHorizontal: 8,
+    paddingBottom: 24,
+    position: 'absolute',
+    bottom: 0,
+    zIndex: 10,
+  },
+  chartBarWrapper: {
+    flex: 1,
+    height: '100%',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  chartBar: {
+    width: 20,
+    backgroundColor: '#206223',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    opacity: 0.9,
   },
   chartLabels: {
     flexDirection: 'row',
