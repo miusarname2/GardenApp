@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity, LayoutAnimation, UIManager, Platform, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, LayoutAnimation, Platform, ScrollView, StyleSheet, TouchableOpacity, UIManager, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { getDb } from '@/db';
@@ -25,10 +25,10 @@ const formatDate = (isoString: string) => {
   const nDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const diffTime = nDay.getTime() - dDay.getTime();
   const diffDays = diffTime / (1000 * 60 * 60 * 24);
-  
+
   if (diffDays === 0) return 'HOY';
   if (diffDays === 1) return 'AYER';
-  
+
   const monthNames = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
   return `${date.getDate()} ${monthNames[date.getMonth()]}`;
 };
@@ -42,51 +42,51 @@ export default function ExploreScreen() {
   useEffect(() => {
     const db = getDb();
     const fetchMetrics = () => {
-       try {
-         const db = getDb();
-         // "Día" -> Últimos 7 días (Gráfico de barras)
-         // "Semana" -> Últimas 3-6 semanas (Gráfico de línea - pedimos últimos 30 días para trazar la curva)
-         const daysLimit = selectedRange === 'Día' ? 7 : 30;
-         const cutoff = new Date(Date.now() - (daysLimit * 24 * 60 * 60 * 1000)).toISOString();
-         
-         const metricsSql = `
+      try {
+        const db = getDb();
+        // "Día" -> Últimos 7 días (Gráfico de barras)
+        // "Semana" -> Últimas 3-6 semanas (Gráfico de línea - pedimos últimos 30 días para trazar la curva)
+        const daysLimit = selectedRange === 'Día' ? 7 : 30;
+        const cutoff = new Date(Date.now() - (daysLimit * 24 * 60 * 60 * 1000)).toISOString();
+
+        const metricsSql = `
            SELECT AVG(hydration) as h, AVG(exposure) as e, MIN(growth_index) as min_g, MAX(growth_index) as max_g
            FROM metrics
            WHERE created_at >= ?
          `;
-         const metricsRes = db.getFirstSync<any>(metricsSql, [cutoff]);
-         
-         if (metricsRes) {
-            const diff = ((metricsRes.max_g || 0) - (metricsRes.min_g || 0));
-            
-            setStats({
-              hydration: Math.round(metricsRes.h || 88),
-              exposure: Number((metricsRes.e || 6.2).toFixed(1)),
-              growthDiff: Number(diff.toFixed(1)) || 1.2,
-            });
-         }
+        const metricsRes = db.getFirstSync<any>(metricsSql, [cutoff]);
 
-         const eventsSql = `
+        if (metricsRes) {
+          const diff = ((metricsRes.max_g || 0) - (metricsRes.min_g || 0));
+
+          setStats({
+            hydration: Math.round(metricsRes.h || 88),
+            exposure: Number((metricsRes.e || 6.2).toFixed(1)),
+            growthDiff: Number(diff.toFixed(1)) || 1.2,
+          });
+        }
+
+        const eventsSql = `
            SELECT * FROM history
            WHERE created_at >= ?
            ORDER BY created_at DESC
          `;
-         const eventsRes = db.getAllSync<any>(eventsSql, [cutoff]);
-         setEvents(eventsRes);
+        const eventsRes = db.getAllSync<any>(eventsSql, [cutoff]);
+        setEvents(eventsRes);
 
-         const chartSql = `
+        const chartSql = `
            SELECT created_at, growth_index 
            FROM metrics 
            WHERE created_at >= ? 
            ORDER BY created_at ASC
          `;
-         const chartRes = db.getAllSync<any>(chartSql, [cutoff]);
-         
-         // Filter empty arrays to at least have a flatline prevent crash
-         setChartData(chartRes.length > 0 ? chartRes : [{ growth_index: 0 }, { growth_index: 1 }]);
-       } catch (error) {
-         console.warn('Explore DB Error:', error);
-       }
+        const chartRes = db.getAllSync<any>(chartSql, [cutoff]);
+
+        // Filter empty arrays to at least have a flatline prevent crash
+        setChartData(chartRes.length > 0 ? chartRes : [{ growth_index: 0 }, { growth_index: 1 }]);
+      } catch (error) {
+        console.warn('Explore DB Error:', error);
+      }
     };
 
     fetchMetrics();
@@ -117,8 +117,8 @@ export default function ExploreScreen() {
             <ThemedText style={styles.heroTitle}>Monstera Deliciosa</ThemedText>
           </View>
           <View style={styles.heroImageContainer}>
-            <Image 
-              source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCsXmx0GPwZaHBVDKDo7FRAkRSTOGdnd2xpCxZLI1aA_SYZ1aUnTuNnGJASXFrA49RE8L8QFKTLEJM1mFoOn05qcO0gYDfIuXSBSma0gUKJWlTCe4HqOSO-a49mfWHkO2ZW5uDYKX3IIKaVE_WVYrtE8uXDLgyrMWbHfBKKzQGuUb7PiXTD-DKKoZGss3ufw30bsfvD3lEbLwoYFgwYCEKY-cy8ZosYYhgayWpcceBJ9xfcOdezsrNRx3n3MIui7wh5ov0gLiZhVC-S' }}
+            <Image
+              source={require('../../assets/images/unnamed1.png')}
               style={styles.heroImage}
               contentFit="cover"
             />
@@ -132,13 +132,13 @@ export default function ExploreScreen() {
               <ThemedText style={styles.chartSubtitle}>Últimos {selectedRange === 'Día' ? '7 días' : '30 días'}</ThemedText>
             </View>
             <View style={styles.segmentedControl}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={selectedRange === 'Día' ? styles.segmentBtnActive : styles.segmentBtnInactive}
                 onPress={() => toggleRange('Día')}
               >
                 <ThemedText style={selectedRange === 'Día' ? styles.segmentTextActive : styles.segmentTextInactive}>Día</ThemedText>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={selectedRange === 'Semana' ? styles.segmentBtnActive : styles.segmentBtnInactive}
                 onPress={() => toggleRange('Semana')}
               >
@@ -154,106 +154,106 @@ export default function ExploreScreen() {
 
           {/* Dynamic Data-Driven Chart Box */}
           <View style={styles.chartArea}>
-             <LinearGradient
-                colors={['rgba(46, 125, 50, 0.12)', 'rgba(46, 125, 50, 0)']}
-                style={styles.chartGradientMock}
-             />
-             
-             {selectedRange === 'Día' ? (
-                /* Bar Chart (Día = 7 Días) */
-                <View style={styles.chartBarsContainer}>
-                  {chartData.map((d, i) => {
-                    const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
-                    const heightPct = Math.max(10, ((d.growth_index || 0) / maxVal) * 100);
-                    return (
-                      <View key={"bar-" + i} style={styles.chartBarWrapper}>
-                         <View style={[styles.chartBar, { height: heightPct + '%' }]} />
-                      </View>
-                    );
-                  })}
-                </View>
-             ) : (
-                /* Line Chart Native (Semana = Último Mes) */
-                <View style={styles.chartLineContainer}>
-                  {chartData.length > 1 && chartData.map((d, i) => {
-                     if (i === chartData.length - 1) return null;
-                     const next = chartData[i+1];
-                     
-                     const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
-                     const minVal = Math.min(...chartData.map(c => c.growth_index || 0));
-                     const range = (maxVal - minVal) || 1;
+            <LinearGradient
+              colors={['rgba(46, 125, 50, 0.12)', 'rgba(46, 125, 50, 0)']}
+              style={styles.chartGradientMock}
+            />
 
-                     const px = (i / (chartData.length - 1)) * CHART_WIDTH;
-                     const py = CHART_HEIGHT - (((d.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
-                     
-                     const nx = ((i + 1) / (chartData.length - 1)) * CHART_WIDTH;
-                     const ny = CHART_HEIGHT - (((next.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
+            {selectedRange === 'Día' ? (
+              /* Bar Chart (Día = 7 Días) */
+              <View style={styles.chartBarsContainer}>
+                {chartData.map((d, i) => {
+                  const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
+                  const heightPct = Math.max(10, ((d.growth_index || 0) / maxVal) * 100);
+                  return (
+                    <View key={"bar-" + i} style={styles.chartBarWrapper}>
+                      <View style={[styles.chartBar, { height: heightPct + '%' }]} />
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              /* Line Chart Native (Semana = Último Mes) */
+              <View style={styles.chartLineContainer}>
+                {chartData.length > 1 && chartData.map((d, i) => {
+                  if (i === chartData.length - 1) return null;
+                  const next = chartData[i + 1];
 
-                     const length = Math.hypot(nx - px, ny - py);
-                     const angle = Math.atan2(ny - py, nx - px) * (180 / Math.PI);
+                  const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
+                  const minVal = Math.min(...chartData.map(c => c.growth_index || 0));
+                  const range = (maxVal - minVal) || 1;
 
-                     return (
-                       <View key={`line-${i}`} style={{
-                          position: 'absolute',
-                          left: px,
-                          top: py - 2.5,
-                          width: length,
-                          height: 5,
-                          backgroundColor: '#206223',
-                          // native anchor fallback approach to rotate correctly between two points from top-left origin
-                          transform: [
-                             { translateX: length/2 - length/2 },
-                             { rotate: angle + 'deg' },
-                          ],
-                          transformOrigin: 'left',
-                          borderRadius: 3,
-                          zIndex: 2,
-                       }} />
-                     );
-                  })}
-                  
-                  {/* Decorative Dots */}
-                  {chartData.map((d, i) => {
-                     if (i % 3 !== 0 && i !== chartData.length - 1) return null; // Show dots selectively
-                     const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
-                     const minVal = Math.min(...chartData.map(c => c.growth_index || 0));
-                     const range = (maxVal - minVal) || 1;
-                     const px = (i / (chartData.length - 1)) * CHART_WIDTH;
-                     const py = CHART_HEIGHT - (((d.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
-                     
-                     return (
-                       <View key={`dot-${i}`} style={{
-                         position: 'absolute',
-                         left: px - 5,
-                         top: py - 5,
-                         width: 10, height: 10,
-                         borderRadius: 5,
-                         backgroundColor: '#e3ebdc',
-                         borderWidth: 2.5,
-                         borderColor: '#206223',
-                         zIndex: 3,
-                       }} />
-                     );
-                  })}
-                </View>
-             )}
+                  const px = (i / (chartData.length - 1)) * CHART_WIDTH;
+                  const py = CHART_HEIGHT - (((d.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
 
-             <View style={styles.chartLabels}>
-                {selectedRange === 'Día' ? (
-                  <>
-                    <ThemedText style={styles.chartLabelText}>LUN</ThemedText>
-                    <ThemedText style={styles.chartLabelText}>MIE</ThemedText>
-                    <ThemedText style={styles.chartLabelText}>VIE</ThemedText>
-                    <ThemedText style={styles.chartLabelText}>HOY</ThemedText>
-                  </>
-                ) : (
-                  <>
-                    <ThemedText style={styles.chartLabelText}>Hace 3 Sem</ThemedText>
-                    <ThemedText style={styles.chartLabelText}>Hace 2 Sem</ThemedText>
-                    <ThemedText style={styles.chartLabelText}>Esta Sem</ThemedText>
-                  </>
-                )}
-             </View>
+                  const nx = ((i + 1) / (chartData.length - 1)) * CHART_WIDTH;
+                  const ny = CHART_HEIGHT - (((next.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
+
+                  const length = Math.hypot(nx - px, ny - py);
+                  const angle = Math.atan2(ny - py, nx - px) * (180 / Math.PI);
+
+                  return (
+                    <View key={`line-${i}`} style={{
+                      position: 'absolute',
+                      left: px,
+                      top: py - 2.5,
+                      width: length,
+                      height: 5,
+                      backgroundColor: '#206223',
+                      // native anchor fallback approach to rotate correctly between two points from top-left origin
+                      transform: [
+                        { translateX: length / 2 - length / 2 },
+                        { rotate: angle + 'deg' },
+                      ],
+                      transformOrigin: 'left',
+                      borderRadius: 3,
+                      zIndex: 2,
+                    }} />
+                  );
+                })}
+
+                {/* Decorative Dots */}
+                {chartData.map((d, i) => {
+                  if (i % 3 !== 0 && i !== chartData.length - 1) return null; // Show dots selectively
+                  const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
+                  const minVal = Math.min(...chartData.map(c => c.growth_index || 0));
+                  const range = (maxVal - minVal) || 1;
+                  const px = (i / (chartData.length - 1)) * CHART_WIDTH;
+                  const py = CHART_HEIGHT - (((d.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
+
+                  return (
+                    <View key={`dot-${i}`} style={{
+                      position: 'absolute',
+                      left: px - 5,
+                      top: py - 5,
+                      width: 10, height: 10,
+                      borderRadius: 5,
+                      backgroundColor: '#e3ebdc',
+                      borderWidth: 2.5,
+                      borderColor: '#206223',
+                      zIndex: 3,
+                    }} />
+                  );
+                })}
+              </View>
+            )}
+
+            <View style={styles.chartLabels}>
+              {selectedRange === 'Día' ? (
+                <>
+                  <ThemedText style={styles.chartLabelText}>LUN</ThemedText>
+                  <ThemedText style={styles.chartLabelText}>MIE</ThemedText>
+                  <ThemedText style={styles.chartLabelText}>VIE</ThemedText>
+                  <ThemedText style={styles.chartLabelText}>HOY</ThemedText>
+                </>
+              ) : (
+                <>
+                  <ThemedText style={styles.chartLabelText}>Hace 3 Sem</ThemedText>
+                  <ThemedText style={styles.chartLabelText}>Hace 2 Sem</ThemedText>
+                  <ThemedText style={styles.chartLabelText}>Esta Sem</ThemedText>
+                </>
+              )}
+            </View>
           </View>
         </View>
 
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 16,
-    paddingBottom: 150, 
+    paddingBottom: 150,
   },
   heroSection: {
     flexDirection: 'row',

@@ -1,13 +1,13 @@
-import React from 'react';
-import { StyleSheet, View, ViewStyle, Dimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
+import React from 'react';
+import { StyleSheet, View, ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { EcoColors } from '@/constants/theme';
 
-import Animated, { useAnimatedStyle, withTiming, withDelay } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withDelay, withTiming } from 'react-native-reanimated';
 
 interface PlantHealthCardProps {
   style?: ViewStyle;
@@ -40,12 +40,12 @@ export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
     <View style={style}>
       {/* Hero Section */}
       <View style={styles.heroContainer}>
-        <Image 
-          source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA8eEZt2iLE0DsKwb5g5WkiaXJ3HAMQqa1wwGBNWDtdjTnQ6xrdkcxxAxm_hi2-u-aHz_8cKk3GAOPAwSHrYYXqYY5WM377E-sCj0NvAtQaoPZlv0O6-svPqbUcmuPXEzlmXJU52z5b1CZPwzVxa6g-jn32KtonlDZdeY8qcczAlyVIVUKSp40gwRldHTBpHrS8KlyL6EKB17456PyNhZ6bozJm7eZ_YA3irUUMdUHAxy0yh0Q0UZ2Sz7GhCSlqaDTh59c_j4SSNcZY' }}
+        <Image
+          source={require('../assets/images/unnamed.png')}
           style={styles.heroImage}
           contentFit="cover"
         />
-        
+
         {/* Floating ID Badge */}
         <BlurView intensity={80} tint="light" style={styles.floatingBadge}>
           <View>
@@ -66,7 +66,7 @@ export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
 
       {/* Stats Bento Grid */}
       <View style={styles.gridContainer}>
-        
+
         {/* Hydration Card */}
         <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerLow }]}>
           <View>
@@ -83,7 +83,7 @@ export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
 
         {/* Light Card */}
         <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerHighest }]}>
-           <View>
+          <View>
             <MaterialIcons name="light-mode" size={24} color={EcoColors.tertiary} style={styles.cardIcon} />
             <ThemedText style={styles.cardSubtitle}>Light Level</ThemedText>
           </View>
@@ -100,7 +100,7 @@ export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
             <ThemedText style={styles.cardSubtitle}>Temp</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText style={styles.cardValue}>{data.temp}°C</ThemedText>
+            <ThemedText style={styles.cardValue}>{data.temp}°C</ThemedText>
           </View>
         </View>
 
@@ -111,7 +111,7 @@ export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
             <ThemedText style={styles.cardSubtitle}>Humidity</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText style={styles.cardValue}>{data.humidity}%</ThemedText>
+            <ThemedText style={styles.cardValue}>{data.humidity}%</ThemedText>
           </View>
         </View>
 
@@ -122,7 +122,7 @@ export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
             <ThemedText style={styles.cardSubtitle}>Batería de Panel</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText style={styles.cardValue}>{data.batPanel}%</ThemedText>
+            <ThemedText style={styles.cardValue}>{data.batPanel}%</ThemedText>
           </View>
         </View>
 
@@ -133,7 +133,7 @@ export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
             <ThemedText style={styles.cardSubtitle}>Batería de Sistema</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText style={styles.cardValue}>{data.batSys}%</ThemedText>
+            <ThemedText style={styles.cardValue}>{data.batSys}%</ThemedText>
           </View>
         </View>
 
