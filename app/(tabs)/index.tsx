@@ -1,54 +1,84 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/Card';
 import { PlantHealthCard } from '@/components/PlantHealthCard';
 import { EcoColors } from '@/constants/theme';
+import { getDb } from '@/db';
 
 export default function DashboardScreen() {
+  const [metrics, setMetrics] = useState<any>(null);
+  const [lastEvent, setLastEvent] = useState<any>(null);
+
+  useEffect(() => {
+    const db = getDb();
+    
+    // Fetch latest metrics
+    const latestMetrics = db.getFirstSync<any>('SELECT * FROM metrics ORDER BY created_at DESC LIMIT 1');
+    if (latestMetrics) {
+      setMetrics({
+        hydration: latestMetrics.hydration,
+        light: latestMetrics.exposure * 300, // Simulated LUX conversion for display
+        temp: latestMetrics.temperature,
+        humidity: latestMetrics.humidity,
+        batPanel: latestMetrics.battery_panel,
+        batSys: latestMetrics.battery_system
+      });
+    }
+
+    // Fetch latest history event
+    const event = db.getFirstSync<any>('SELECT * FROM history ORDER BY created_at DESC LIMIT 1');
+    setLastEvent(event);
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <ThemedText type="labelMedium" style={styles.greeting}>Buen día, Botánico</ThemedText>
+            <ThemedText type="labelMedium" style={styles.greeting}>BUEN DÍA, BOTÁNICO</ThemedText>
             <ThemedText type="headlineMedium" style={styles.title}>Tu Ecosistema</ThemedText>
           </View>
-          <View style={styles.avatar}>
+          <TouchableOpacity style={styles.avatar}>
             <MaterialIcons name="person" size={24} color={EcoColors.onSurface} />
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Primary Plant Health Card */}
         <View style={styles.primaryCardContainer}>
-          <PlantHealthCard />
+          <PlantHealthCard metrics={metrics} />
         </View>
 
         {/* Secondary Dashboard Cards (Asymmetrical layout) */}
         <View style={styles.secondaryCardsGrid}>
-          {/* Timeline / History */}
-          <Card backgroundColor={EcoColors.surfaceContainerLow} style={styles.historyCard}>
-            <View style={styles.historyHeader}>
-              <MaterialIcons name="history" size={24} color={EcoColors.tertiary} />
-              <ThemedText type="titleMedium" style={{ fontWeight: 'bold' }}>Último Riego</ThemedText>
+          {/* Latest Event Card */}
+          <TouchableOpacity 
+            activeOpacity={0.9} 
+            style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerLow, flex: 2 }]}
+          >
+            <View style={styles.cardHeader}>
+              <MaterialIcons name="history" size={20} color={EcoColors.tertiary} />
+              <ThemedText style={styles.cardLabel}>ÚLTIMO EVENTO</ThemedText>
             </View>
-            <ThemedText type="bodyMedium" style={{ color: EcoColors.onSurfaceVariant, marginTop: 8 }}>
-              Hace 2 días. La humedad actual está en un nivel óptimo, no requiere riego por ahora.
+            <ThemedText style={styles.cardTitle}>{lastEvent?.action || 'Sin eventos'}</ThemedText>
+            <ThemedText style={styles.cardDesc} numberOfLines={2}>
+              {lastEvent?.details || 'Día tranquilo en el huerto.'}
             </ThemedText>
-          </Card>
+          </TouchableOpacity>
 
-          {/* Quick Action */}
-          <Card backgroundColor={EcoColors.surfaceContainerHigh} style={styles.actionCard}>
-             <View style={[styles.iconContainer, { backgroundColor: EcoColors.primaryContainer + '20', alignSelf: 'flex-start', marginBottom: 12 }]}>
-                <MaterialIcons name="add" size={24} color={EcoColors.primary} />
-              </View>
-              <ThemedText type="titleMedium" style={{ fontWeight: 'bold' }}>Añadir Planta</ThemedText>
-              <ThemedText type="bodySmall" style={{ color: EcoColors.onSurfaceVariant, marginTop: 4 }}>Sincroniza un nuevo sensor.</ThemedText>
-          </Card>
+          {/* Quick Action Card */}
+          <TouchableOpacity 
+            activeOpacity={0.9} 
+            style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerHigh, flex: 1.2 }]}
+          >
+            <View style={styles.iconCircle}>
+              <MaterialIcons name="add" size={20} color={EcoColors.primary} />
+            </View>
+            <ThemedText style={styles.actionTitle}>Añadir Planta</ThemedText>
+          </TouchableOpacity>
         </View>
         
       </ScrollView>
@@ -64,7 +94,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 32,
-    paddingBottom: 100,
+    paddingBottom: 120, // Extra space for floating tab bar
   },
   header: {
     flexDirection: 'row',
@@ -73,12 +103,17 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   greeting: {
-    color: EcoColors.outline,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: '#707a6c',
+    letterSpacing: 1.5,
     marginBottom: 4,
   },
   title: {
-    color: EcoColors.primary,
-    fontWeight: '800',
+    fontFamily: 'Manrope_800ExtraBold',
+    fontSize: 30,
+    color: '#206223',
+    letterSpacing: -1,
   },
   avatar: {
     width: 48,
@@ -89,24 +124,59 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryCardContainer: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   secondaryCardsGrid: {
     flexDirection: 'row',
     gap: 16,
+    height: 140,
   },
-  historyCard: {
-    flex: 2,
+  bentoCard: {
+    borderRadius: 28,
     padding: 20,
+    justifyContent: 'space-between',
+    shadowColor: '#171d14',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  historyHeader: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    marginBottom: 8,
   },
-  actionCard: {
-    flex: 1,
-    padding: 20,
+  cardLabel: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#707a6c',
+    letterSpacing: 0.5,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontFamily: 'Manrope_800ExtraBold',
+    color: '#171d14',
+    marginBottom: 4,
+  },
+  cardDesc: {
+    fontSize: 12,
+    color: '#40493d',
+    lineHeight: 18,
+    opacity: 0.8,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(32, 98, 35, 0.1)',
+    alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 12,
+  },
+  actionTitle: {
+    fontSize: 14,
+    fontFamily: 'Manrope_800ExtraBold',
+    color: '#206223',
   },
 });

@@ -6,11 +6,35 @@ import { BlurView } from 'expo-blur';
 
 import { ThemedText } from '@/components/themed-text';
 
+import Animated, { useAnimatedStyle, withTiming, withDelay } from 'react-native-reanimated';
+
 interface PlantHealthCardProps {
   style?: ViewStyle;
+  metrics?: {
+    hydration: number;
+    light: number;
+    temp: number;
+    humidity: number;
+    batPanel: number;
+    batSys: number;
+  };
 }
 
-export const PlantHealthCard = ({ style }: PlantHealthCardProps) => {
+export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
+  // Default values if no metrics provided
+  const data = metrics || {
+    hydration: 68,
+    light: 1200,
+    temp: 24,
+    humidity: 52,
+    batPanel: 92,
+    batSys: 78
+  };
+
+  const progressStyle = useAnimatedStyle(() => ({
+    width: withDelay(300, withTiming(`${data.hydration}%`, { duration: 1000 })),
+  }));
+
   return (
     <View style={style}>
       {/* Hero Section */}
@@ -49,9 +73,9 @@ export const PlantHealthCard = ({ style }: PlantHealthCardProps) => {
             <ThemedText type="labelSmall" style={styles.cardSubtitle}>Hydration</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-            <ThemedText type="displaySmall" style={styles.cardValue}>68%</ThemedText>
+            <ThemedText type="displaySmall" style={styles.cardValue}>{data.hydration}%</ThemedText>
             <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: '68%' }]} />
+              <Animated.View style={[styles.progressBarFill, progressStyle]} />
             </View>
           </View>
         </View>
@@ -63,7 +87,7 @@ export const PlantHealthCard = ({ style }: PlantHealthCardProps) => {
             <ThemedText type="labelSmall" style={styles.cardSubtitle}>Light Level</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-            <ThemedText type="displaySmall" style={styles.cardValue}>1.2k</ThemedText>
+            <ThemedText type="displaySmall" style={styles.cardValue}>{(data.light / 1000).toFixed(1)}k</ThemedText>
             <ThemedText type="labelSmall" style={styles.cardDetail}>LUX • OPTIMAL</ThemedText>
           </View>
         </View>
@@ -75,7 +99,7 @@ export const PlantHealthCard = ({ style }: PlantHealthCardProps) => {
             <ThemedText type="labelSmall" style={styles.cardSubtitle}>Temp</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText type="displaySmall" style={styles.cardValue}>24°C</ThemedText>
+             <ThemedText type="displaySmall" style={styles.cardValue}>{data.temp}°C</ThemedText>
           </View>
         </View>
 
@@ -86,7 +110,7 @@ export const PlantHealthCard = ({ style }: PlantHealthCardProps) => {
             <ThemedText type="labelSmall" style={styles.cardSubtitle}>Humidity</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText type="displaySmall" style={styles.cardValue}>52%</ThemedText>
+             <ThemedText type="displaySmall" style={styles.cardValue}>{data.humidity}%</ThemedText>
           </View>
         </View>
 
@@ -97,7 +121,7 @@ export const PlantHealthCard = ({ style }: PlantHealthCardProps) => {
             <ThemedText type="labelSmall" style={styles.cardSubtitle}>Batería de Panel</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText type="displaySmall" style={styles.cardValue}>92%</ThemedText>
+             <ThemedText type="displaySmall" style={styles.cardValue}>{data.batPanel}%</ThemedText>
           </View>
         </View>
 
@@ -108,7 +132,7 @@ export const PlantHealthCard = ({ style }: PlantHealthCardProps) => {
             <ThemedText type="labelSmall" style={styles.cardSubtitle}>Batería de Sistema</ThemedText>
           </View>
           <View style={styles.cardBottom}>
-             <ThemedText type="displaySmall" style={styles.cardValue}>78%</ThemedText>
+             <ThemedText type="displaySmall" style={styles.cardValue}>{data.batSys}%</ThemedText>
           </View>
         </View>
 
