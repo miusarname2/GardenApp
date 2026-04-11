@@ -22,11 +22,71 @@ export function setupDatabase() {
         details TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sensor_id INTEGER,
+        hydration INTEGER,
+        exposure REAL,
+        growth_index REAL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+    
+    // Check if seeded
+    const historyCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM history');
+    const metricsCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM metrics');
+
+    if (historyCount && historyCount.count === 0 && metricsCount && metricsCount.count === 0) {
+       console.log('Seeding SQLite mock data...');
+       seedDatabase(db);
+    }
     
     console.log('Local SQLite Database initialized successfully');
   } catch (error) {
     console.warn('Error initializing database:', error);
+  }
+}
+
+function seedDatabase(db: SQLite.SQLiteDatabase) {
+  try {
+    const now = new Date();
+    const msInDay = 24 * 60 * 60 * 1000;
+    
+    // Seed Metrics for last 14 days
+    const insertMetric = db.prepareSync('INSERT INTO metrics (hydration, exposure, growth_index, created_at) VALUES (?, ?, ?, ?)');
+    for (let i = 0; i < 14; i++) {
+        // Data logic
+        const date = new Date(now.getTime() - i * msInDay).toISOString();
+        const hydration = 65 + Math.random() * 30; // 65-95
+        const exposure = 4 + Math.random() * 4; // 4-8 hrs
+        const growth = (14 - i) * 0.8 + Math.random() * 2; // ascending growth (older is lower)
+
+        insertMetric.executeSync([Math.round(hydration), Number(exposure.toFixed(1)), Number(growth.toFixed(1)), date]);
+    }
+    insertMetric.finalizeSync();
+
+    // Seed History Events
+    const insertHistory = db.prepareSync('INSERT INTO history (action, details, created_at) VALUES (?, ?, ?)');
+    
+    const events = [
+       { action: 'New Leaf Unfurled', details: 'System detected a 15% increase in total surface area. Node health optimal.', daysAgo: 0 },
+       { action: 'Watering Cycle', details: 'Automated 150ml hydration triggered. Soil moisture stabilized.', daysAgo: 1 },
+       { action: 'Fertilization Cycle', details: 'Organic nitrogen-rich supplement added to irrigation system.', daysAgo: 2 },
+       { action: 'Temperature Alert', details: 'Ambient temperature reached 28°C. Active cooling fan engaged briefly.', daysAgo: 4 },
+       { action: 'Repotting Event', details: 'Transferred to 12" terracotta vessel. Root aeration increased.', daysAgo: 8 },
+       { action: 'Pruning Session', details: 'Removed dead leaves to promote healthy growth.', daysAgo: 12 },
+    ];
+
+    events.forEach(evt => {
+        const date = new Date(now.getTime() - evt.daysAgo * msInDay).toISOString();
+        insertHistory.executeSync([evt.action, evt.details, date]);
+    });
+    insertHistory.finalizeSync();
+
+    console.log('Seed ejecutado con éxito');
+  } catch (err) {
+    console.warn('Error seeding DB:', err);
   }
 }
 
