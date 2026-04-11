@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity, LayoutAnimation, UIManager, Platform } from 'react-native';
+import { StyleSheet, View, ScrollView, TouchableOpacity, LayoutAnimation, UIManager, Platform, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -7,6 +7,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { ThemedText } from '@/components/themed-text';
 import { getDb } from '@/db';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CHART_WIDTH = SCREEN_WIDTH - 96; // 24 outer padding * 2 + 24 inner padding * 2
+const CHART_HEIGHT = 100;
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -16,7 +20,6 @@ const formatDate = (isoString: string) => {
   if (!isoString) return '';
   const date = new Date(isoString);
   const now = new Date();
-  // Set to midnight for fair day comparison
   const dDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const nDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const diffTime = nDay.getTime() - dDay.getTime();
@@ -30,7 +33,7 @@ const formatDate = (isoString: string) => {
 };
 
 export default function ExploreScreen() {
-  const [selectedRange, setSelectedRange] = useState<'Día' | 'Semana'>('Semana');
+  const [selectedRange, setSelectedRange] = useState<'Día' | 'Semana'>('Día');
   const [stats, setStats] = useState({ hydration: 88, exposure: 6.2, growthDiff: 12.4 });
   const [events, setEvents] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
@@ -38,8 +41,10 @@ export default function ExploreScreen() {
   useEffect(() => {
     const db = getDb();
     const fetchMetrics = () => {
-       const days = selectedRange === 'Día' ? 1 : 7;
-       const cutoff = new Date(Date.now() - (days * 24 * 60 * 60 * 1000)).toISOString();
+       // "Día" -> Últimos 7 días (Gráfico de barras)
+       // "Semana" -> Últimas 3-6 semanas (Gráfico de línea - pedimos últimos 30 días para trazar la curva)
+       const daysLimit = selectedRange === 'Día' ? 7 : 30;
+       const cutoff = new Date(Date.now() - (daysLimit * 24 * 60 * 60 * 1000)).toISOString();
        
        const metricsSql = `
          SELECT AVG(hydration) as h, AVG(exposure) as e, MIN(growth_index) as min_g, MAX(growth_index) as max_g
@@ -49,13 +54,12 @@ export default function ExploreScreen() {
        const metricsRes = db.getFirstSync<any>(metricsSql, [cutoff]);
        
        if (metricsRes) {
-          // If range is a single day and min/max are same, simulate a small daily variation 
-          const diff = selectedRange === 'Día' ? 1.2 : ((metricsRes.max_g || 0) - (metricsRes.min_g || 0));
+          const diff = ((metricsRes.max_g || 0) - (metricsRes.min_g || 0));
           
           setStats({
             hydration: Math.round(metricsRes.h || 88),
             exposure: Number((metricsRes.e || 6.2).toFixed(1)),
-            growthDiff: Number(diff.toFixed(1)),
+            growthDiff: Number(diff.toFixed(1)) || 1.2,
           });
        }
 
@@ -74,7 +78,9 @@ export default function ExploreScreen() {
          ORDER BY created_at ASC
        `;
        const chartRes = db.getAllSync<any>(chartSql, [cutoff]);
-       setChartData(chartRes);
+       
+       // Filter empty arrays to at least have a flatline prevent crash
+       setChartData(chartRes.length > 0 ? chartRes : [{ growth_index: 0 }, { growth_index: 1 }]);
     };
 
     fetchMetrics();
@@ -88,7 +94,6 @@ export default function ExploreScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* TopAppBar Equivalent */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <MaterialIcons name="eco" size={24} color="#2e7d32" />
@@ -100,8 +105,6 @@ export default function ExploreScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* Hero Plant Identity */}
         <View style={styles.heroSection}>
           <View style={styles.heroText}>
             <ThemedText style={styles.heroSubtitle}>ACTIVE SPECIMEN</ThemedText>
@@ -116,12 +119,11 @@ export default function ExploreScreen() {
           </View>
         </View>
 
-        {/* Growth Index Chart Module */}
         <View style={styles.chartModule}>
           <View style={styles.chartHeader}>
             <View>
               <ThemedText style={styles.chartTitle}>Growth Index</ThemedText>
-              <ThemedText style={styles.chartSubtitle}>Últimos {selectedRange === 'Día' ? '24 horas' : '7 días'}</ThemedText>
+              <ThemedText style={styles.chartSubtitle}>Últimos {selectedRange === 'Día' ? '7 días' : '30 días'}</ThemedText>
             </View>
             <View style={styles.segmentedControl}>
               <TouchableOpacity 
@@ -141,30 +143,97 @@ export default function ExploreScreen() {
 
           <View style={styles.chartStats}>
             <ThemedText style={styles.chartValue}>+{stats.growthDiff}%</ThemedText>
-            <ThemedText style={styles.chartStatus}>{selectedRange === 'Semana' ? 'STRONG GROWTH' : 'STABLE'}</ThemedText>
+            <ThemedText style={styles.chartStatus}>{selectedRange === 'Semana' ? 'STRONG GROWTH' : 'STABLE VITALITY'}</ThemedText>
           </View>
 
-          {/* Conceptual Line Chart Box */}
+          {/* Dynamic Data-Driven Chart Box */}
           <View style={styles.chartArea}>
-             <Image 
-                source={{ uri: `data:image/svg+xml;utf8,${encodeURIComponent(`
-                  <svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox="0 0 100 100">
-                    <path d="M0,80 Q10,75 20,60 T40,65 T60,40 T80,30 T100,10" fill="none" stroke="#206223" stroke-linecap="round" stroke-width="3"></path>
-                    <path d="M0,80 Q10,75 20,60 T40,65 T60,40 T80,30 T100,10 V100 H0 Z" fill="url(#chart-grad)" opacity="0.15"></path>
-                    <defs>
-                      <linearGradient id="chart-grad" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stop-color="#206223"></stop>
-                        <stop offset="100%" stop-color="#206223" stop-opacity="0"></stop>
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                `)}` }}
-                style={styles.chartSvgMock}
-                contentFit="fill"
-                transition={500}
+             <LinearGradient
+                colors={['rgba(46, 125, 50, 0.12)', 'rgba(46, 125, 50, 0)']}
+                style={styles.chartGradientMock}
              />
+             
+             {selectedRange === 'Día' ? (
+                /* Bar Chart (Día = 7 Días) */
+                <View style={styles.chartBarsContainer}>
+                  {chartData.map((d, i) => {
+                    const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
+                    const heightPct = Math.max(10, ((d.growth_index || 0) / maxVal) * 100);
+                    return (
+                      <View key={"bar-" + i} style={styles.chartBarWrapper}>
+                         <View style={[styles.chartBar, { height: heightPct + '%' }]} />
+                      </View>
+                    );
+                  })}
+                </View>
+             ) : (
+                /* Line Chart Native (Semana = Último Mes) */
+                <View style={styles.chartLineContainer}>
+                  {chartData.length > 1 && chartData.map((d, i) => {
+                     if (i === chartData.length - 1) return null;
+                     const next = chartData[i+1];
+                     
+                     const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
+                     const minVal = Math.min(...chartData.map(c => c.growth_index || 0));
+                     const range = (maxVal - minVal) || 1;
+
+                     const px = (i / (chartData.length - 1)) * CHART_WIDTH;
+                     const py = CHART_HEIGHT - (((d.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
+                     
+                     const nx = ((i + 1) / (chartData.length - 1)) * CHART_WIDTH;
+                     const ny = CHART_HEIGHT - (((next.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
+
+                     const length = Math.hypot(nx - px, ny - py);
+                     const angle = Math.atan2(ny - py, nx - px) * (180 / Math.PI);
+
+                     return (
+                       <View key={`line-${i}`} style={{
+                          position: 'absolute',
+                          left: px,
+                          top: py - 2.5,
+                          width: length,
+                          height: 5,
+                          backgroundColor: '#206223',
+                          // native anchor fallback approach to rotate correctly between two points from top-left origin
+                          transform: [
+                             { translateX: length/2 - length/2 },
+                             { rotate: angle + 'deg' },
+                          ],
+                          transformOrigin: 'left',
+                          borderRadius: 3,
+                          zIndex: 2,
+                       }} />
+                     );
+                  })}
+                  
+                  {/* Decorative Dots */}
+                  {chartData.map((d, i) => {
+                     if (i % 3 !== 0 && i !== chartData.length - 1) return null; // Show dots selectively
+                     const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
+                     const minVal = Math.min(...chartData.map(c => c.growth_index || 0));
+                     const range = (maxVal - minVal) || 1;
+                     const px = (i / (chartData.length - 1)) * CHART_WIDTH;
+                     const py = CHART_HEIGHT - (((d.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
+                     
+                     return (
+                       <View key={`dot-${i}`} style={{
+                         position: 'absolute',
+                         left: px - 5,
+                         top: py - 5,
+                         width: 10, height: 10,
+                         borderRadius: 5,
+                         backgroundColor: '#e3ebdc',
+                         borderWidth: 2.5,
+                         borderColor: '#206223',
+                         zIndex: 3,
+                       }} />
+                     );
+                  })}
+                </View>
+             )}
+
              <View style={styles.chartLabels}>
-                {selectedRange === 'Semana' ? (
+                {selectedRange === 'Día' ? (
                   <>
                     <ThemedText style={styles.chartLabelText}>LUN</ThemedText>
                     <ThemedText style={styles.chartLabelText}>MIE</ThemedText>
@@ -173,19 +242,16 @@ export default function ExploreScreen() {
                   </>
                 ) : (
                   <>
-                    <ThemedText style={styles.chartLabelText}>00:00</ThemedText>
-                    <ThemedText style={styles.chartLabelText}>08:00</ThemedText>
-                    <ThemedText style={styles.chartLabelText}>16:00</ThemedText>
-                    <ThemedText style={styles.chartLabelText}>AHORA</ThemedText>
+                    <ThemedText style={styles.chartLabelText}>Hace 3 Sem</ThemedText>
+                    <ThemedText style={styles.chartLabelText}>Hace 2 Sem</ThemedText>
+                    <ThemedText style={styles.chartLabelText}>Esta Sem</ThemedText>
                   </>
                 )}
              </View>
           </View>
         </View>
 
-        {/* Stats Bento Grid */}
         <View style={styles.bentoGrid}>
-          {/* Hydration */}
           <View style={styles.bentoCard}>
             <MaterialIcons name="water-drop" size={24} color="#325c5a" style={styles.bentoIcon} />
             <View>
@@ -194,7 +260,6 @@ export default function ExploreScreen() {
             </View>
           </View>
 
-          {/* Exposure */}
           <View style={styles.bentoCard}>
             <MaterialIcons name="wb-sunny" size={24} color="#286b33" style={styles.bentoIcon} />
             <View>
@@ -204,7 +269,6 @@ export default function ExploreScreen() {
           </View>
         </View>
 
-        {/* Growth Timeline */}
         <View style={styles.timelineSection}>
           <View style={styles.timelineHeader}>
             <ThemedText style={styles.timelineTitle}>Resumen</ThemedText>
@@ -326,6 +390,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     padding: 24,
     marginBottom: 24,
+    overflow: 'hidden',
   },
   chartHeader: {
     flexDirection: 'row',
@@ -404,10 +469,9 @@ const styles = StyleSheet.create({
   chartBarsContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     width: '100%',
     height: 100,
-    paddingHorizontal: 8,
     paddingBottom: 24,
     position: 'absolute',
     bottom: 0,
@@ -418,18 +482,27 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'flex-end',
     alignItems: 'center',
+    marginHorizontal: 4,
   },
   chartBar: {
-    width: 20,
+    width: 14,
     backgroundColor: '#206223',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
     opacity: 0.9,
+  },
+  chartLineContainer: {
+    position: 'absolute',
+    bottom: 24,
+    left: 0,
+    width: '100%',
+    height: 100,
+    zIndex: 10,
   },
   chartLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
     paddingBottom: 8,
   },
   chartLabelText: {
@@ -475,7 +548,6 @@ const styles = StyleSheet.create({
     color: '#707a6c',
   },
   timelineSection: {
-    // Empty
   },
   timelineHeader: {
     flexDirection: 'row',
