@@ -1,31 +1,33 @@
 import { StyleSheet, Text, type TextProps } from 'react-native';
 
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { EcoColors, Fonts, Typography } from '@/constants/theme';
 
 export type ThemedTextProps = TextProps & {
   lightColor?: string;
   darkColor?: string;
-  type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link';
+  type?: keyof typeof Typography | 'link' | 'default' | 'title' | 'defaultSemiBold' | 'subtitle';
 };
 
 export function ThemedText({
   style,
   lightColor,
   darkColor,
-  type = 'default',
+  type = 'bodyMedium',
   ...rest
 }: ThemedTextProps) {
-  const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+  const defaultColor = EcoColors.onSurface;
+  
+  let mappedType = type;
+  if (type === 'default') mappedType = 'bodyMedium';
+  if (type === 'defaultSemiBold') mappedType = 'bodyLarge'; // mapping to roughly similar
+  if (type === 'title') mappedType = 'headlineLarge';
+  if (type === 'subtitle') mappedType = 'titleLarge';
 
   return (
     <Text
       style={[
-        { color },
-        type === 'default' ? styles.default : undefined,
-        type === 'title' ? styles.title : undefined,
-        type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
-        type === 'subtitle' ? styles.subtitle : undefined,
-        type === 'link' ? styles.link : undefined,
+        { color: defaultColor, fontFamily: Fonts?.body },
+        mappedType === 'link' ? styles.link : Typography[mappedType] ? Typography[mappedType] : undefined,
         style,
       ]}
       {...rest}
@@ -34,27 +36,9 @@ export function ThemedText({
 }
 
 const styles = StyleSheet.create({
-  default: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  defaultSemiBold: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    lineHeight: 32,
-  },
-  subtitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
   link: {
-    lineHeight: 30,
-    fontSize: 16,
-    color: '#0a7ea4',
+    ...(Typography.bodyMedium as any),
+    color: EcoColors.primary,
+    textDecorationLine: 'underline',
   },
 });
