@@ -4,7 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withDelay, Easing, withSequence } from 'react-native-reanimated';
-import { BleManager, Device } from 'react-native-ble-plx';
+import { Device } from 'react-native-ble-plx';
+import { bleManager } from '@/constants/ble';
 import * as ExpoDevice from 'expo-device';
 
 import { ThemedText } from '@/components/themed-text';
@@ -62,8 +63,7 @@ const PulseRing = ({ delay = 0, size = 300, color = EcoColors.primary + '20' }) 
   );
 };
 
-// Se instancia fuera o a nivel global (lo ideal es un Singleton/Context)
-const bleManager = new BleManager();
+// Singleton instance used from @/constants/ble
 
 export default function BluetoothOnboardingScreen() {
   const [isScanning, setIsScanning] = useState(false);

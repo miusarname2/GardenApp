@@ -4,8 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Dimensions, LayoutAnimation, Platform, ScrollView, StyleSheet, TouchableOpacity, UIManager, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { getDb } from '@/db';
 
@@ -34,6 +33,7 @@ const formatDate = (isoString: string) => {
 };
 
 export default function ExploreScreen() {
+  const insets = useSafeAreaInsets();
   const [selectedRange, setSelectedRange] = useState<'Día' | 'Semana'>('Día');
   const [stats, setStats] = useState({ hydration: 88, exposure: 6.2, growthDiff: 12.4 });
   const [events, setEvents] = useState<any[]>([]);
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 16,
-    paddingBottom: 150,
+    paddingBottom: 160,
   },
   heroSection: {
     flexDirection: 'row',

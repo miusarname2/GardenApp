@@ -11,7 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { BleManager, Device } from "react-native-ble-plx";
+import { Device } from "react-native-ble-plx";
+import { bleManager } from "@/constants/ble";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -20,8 +21,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
-
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { EcoColors } from "@/constants/theme";
 
@@ -59,12 +59,13 @@ const PulseCircle = ({ delay = 0 }: { delay?: number }) => {
 };
 
 export default function SettingsScreen() {
+  const insets = useSafeAreaInsets();
   const [isScanning, setIsScanning] = useState(false);
   const [devices, setDevices] = useState<Record<string, Device>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 6;
 
-  const manager = useMemo(() => new BleManager(), []);
+  const manager = bleManager;
   const scanTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const requestPermissions = async () => {
@@ -136,7 +137,7 @@ export default function SettingsScreen() {
   useEffect(() => {
     return () => {
       manager.stopDeviceScan();
-      manager.destroy();
+      // manager.destroy(); // Shared instance should NOT be destroyed
       if (scanTimeout.current) clearTimeout(scanTimeout.current);
     };
   }, [manager]);
@@ -442,7 +443,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 24,
-    paddingBottom: 150,
+    paddingBottom: 160,
   },
   visualizerSection: {
     alignItems: "center",

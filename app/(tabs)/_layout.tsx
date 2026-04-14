@@ -15,11 +15,11 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     <View style={[
       styles.tabBarContainer, 
       { 
-        paddingBottom: Math.max(insets.bottom, 24), // pb-6 equivalent or safe area
-        paddingTop: 12, // pt-3 equivalent
+        bottom: Math.max(insets.bottom, 16),
+        marginHorizontal: 16,
       }
     ]}>
-      <BlurView intensity={90} tint="light" style={StyleSheet.absoluteFill} />
+      <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
       <View style={styles.tabBarContent}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
@@ -110,13 +110,11 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarContainer: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
     zIndex: 50,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    backgroundColor: 'rgba(245, 252, 237, 0.7)',
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
     shadowColor: '#171d14',
     shadowOffset: { width: 0, height: -12 },
     shadowOpacity: 0.06,
@@ -130,7 +128,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
   },
   activeTabContainer: {
     alignItems: 'center',

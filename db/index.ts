@@ -1,6 +1,10 @@
 import * as SQLite from 'expo-sqlite';
 
+let isDbInitialized = false;
+
 export function setupDatabase() {
+  if (isDbInitialized) return;
+  
   try {
     const db = SQLite.openDatabaseSync('garden.db');
     
@@ -67,6 +71,7 @@ export function setupDatabase() {
       console.warn('Error checking seed status:', e);
     }
     
+    isDbInitialized = true;
     console.log('Local SQLite Database initialized successfully');
   } catch (error) {
     console.warn('Critical error initializing database:', error);

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+
 
 import { ThemedText } from '@/components/themed-text';
 import { PlantHealthCard } from '@/components/PlantHealthCard';
@@ -13,6 +14,7 @@ import { getDb } from '@/db';
 const { width } = Dimensions.get('window');
 
 export default function DashboardScreen() {
+  const insets = useSafeAreaInsets();
   const [metrics, setMetrics] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
 
@@ -91,7 +93,10 @@ export default function DashboardScreen() {
       </ScrollView>
 
       {/* FAB: Water Now */}
-      <TouchableOpacity activeOpacity={0.85} style={styles.fab}>
+      <TouchableOpacity 
+        activeOpacity={0.85} 
+        style={[styles.fab, { bottom: Math.max(insets.bottom, 16) + 90 }]}
+      >
         <LinearGradient
           colors={[EcoColors.primary, '#3a7b3a']}
           start={{ x: 0, y: 0 }}
