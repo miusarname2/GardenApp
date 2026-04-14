@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, ViewStyle, TextStyle } from 'react-native';
+import { TouchableOpacity, Text, View, ViewStyle, TextStyle } from 'react-native';
 import { EcoColors } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -89,29 +89,39 @@ export const Button: React.FC<ButtonProps> = ({
     }
   };
 
-  const buttonContent = (
-    <TouchableOpacity
-      style={[getButtonStyle(), style]}
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.8}
-    >
-      <Text style={[getTextStyle(), textStyle]}>{title}</Text>
-    </TouchableOpacity>
-  );
+  const buttonStyle = getButtonStyle();
+  const textComputedStyle = getTextStyle();
 
   if (variant === 'primary') {
     return (
-      <LinearGradient
-        colors={[EcoColors.primary, EcoColors.primaryContainer]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={getButtonStyle()}
+      <TouchableOpacity
+        onPress={onPress}
+        disabled={disabled}
+        activeOpacity={0.8}
+        style={style}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
-        {buttonContent}
-      </LinearGradient>
+        <LinearGradient
+          colors={[EcoColors.primary, EcoColors.primaryContainer]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={buttonStyle}
+        >
+          <Text style={[textComputedStyle, textStyle]}>{title}</Text>
+        </LinearGradient>
+      </TouchableOpacity>
     );
   }
 
-  return buttonContent;
+  return (
+    <TouchableOpacity
+      style={[buttonStyle, style]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.8}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <Text style={[textComputedStyle, textStyle]}>{title}</Text>
+    </TouchableOpacity>
+  );
 };

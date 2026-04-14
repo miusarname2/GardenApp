@@ -211,6 +211,7 @@ export default function BluetoothOnboardingScreen() {
                   activeOpacity={0.8}
                   onPress={() => setSelectedDeviceId(device.id)}
                   style={[styles.deviceItem, isSelected && styles.deviceItemSelected]}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <View style={styles.deviceItemContent}>
                     <View style={[styles.deviceIcon, { backgroundColor: isSelected ? EcoColors.primaryContainer + '20' : EcoColors.surfaceContainerHighest + '50' }]}>
