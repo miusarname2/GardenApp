@@ -1,50 +1,125 @@
-# Welcome to your Expo app 👋
+# GardenApp 🌱
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Una aplicación móvil para monitorear la salud de tus plantas utilizando sensores Bluetooth Low Energy (BLE). Rastrea métricas ambientales como hidratación, exposición a la luz, temperatura, humedad y niveles de batería para mantener tus plantas en óptimas condiciones.
 
-## Get started
+> **Versiones en otros idiomas**: [English](README.en.md) | [中文](README.cn.md) | [Русский](README.ru.md) | [日本語](README.jp.md)
 
-1. Install dependencies
+## 🚀 Cómo funciona
 
+GardenApp conecta sensores inalámbricos colocados en tus plantas para recopilar datos en tiempo real. La aplicación muestra un dashboard con métricas actuales, gráficos históricos de crecimiento y un sistema de escaneo Bluetooth para configurar nuevos dispositivos.
+
+### Características principales
+
+- **Dashboard en tiempo real**: Visualiza métricas actuales de tus plantas
+- **Gráficos históricos**: Rastrea el crecimiento y tendencias a lo largo del tiempo
+- **Escaneo Bluetooth**: Descubre y conecta sensores BLE cercanos
+- **Base de datos local**: Almacena datos usando SQLite para funcionamiento offline
+- **Interfaz intuitiva**: Diseño moderno con navegación por pestañas
+
+## 📦 Instalación
+
+### Prerrequisitos
+
+- Node.js (versión 18 o superior)
+- npm o yarn
+- Expo CLI
+- Dispositivo móvil con Android/iOS o emulador
+
+### Pasos de instalación
+
+1. **Clona el repositorio**
+   ```bash
+   git clone <url-del-repositorio>
+   cd GardenApp
+   ```
+
+2. **Instala dependencias**
    ```bash
    npm install
    ```
 
-2. Start the app
-
+3. **Inicia la aplicación**
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+4. **Ejecuta en dispositivo**
+   - Escanea el código QR con la app Expo Go
+   - O usa un emulador/simulador
+   - Para desarrollo nativo: `npm run android` o `npm run ios`
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 🏗️ Arquitectura
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Estructura del proyecto
 
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+GardenApp/
+├── app/                    # Páginas (file-based routing con Expo Router)
+│   ├── (tabs)/            # Navegación por pestañas
+│   │   ├── index.tsx      # Dashboard principal
+│   │   ├── explore.tsx    # Historial y gráficos
+│   │   └── settings.tsx   # Configuración y escaneo BLE
+│   ├── bluetooth-onboarding.tsx  # Tutorial de conexión
+│   └── _layout.tsx        # Layout raíz
+├── components/            # Componentes reutilizables
+│   └── PlantHealthCard.tsx # Tarjeta de métricas
+├── constants/             # Configuraciones y temas
+├── db/                    # Base de datos SQLite
+│   └── index.ts          # Configuración y seeding
+└── assets/               # Imágenes y recursos
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Tecnologías utilizadas
 
-## Learn more
+- **Framework**: React Native con Expo SDK 54
+- **Navegación**: Expo Router (file-based routing)
+- **Base de datos**: SQLite con expo-sqlite
+- **Bluetooth**: react-native-ble-plx para comunicación BLE
+- **UI/UX**: React Native Reanimated para animaciones
+- **Estilos**: StyleSheet con LinearGradient y Material Icons
+- **Tipado**: TypeScript
+- **Fuentes**: Google Fonts (Inter, Manrope)
 
-To learn more about developing your project with Expo, look at the following resources:
+### Base de datos
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+La aplicación utiliza SQLite para almacenamiento local con las siguientes tablas:
 
-## Join the community
+- **sensors**: Información de dispositivos conectados
+- **metrics**: Métricas ambientales (hidratación, temperatura, etc.)
+- **history**: Registro de eventos y acciones
 
-Join our community of developers creating universal apps.
+Los datos se inicializan con valores de ejemplo al primer uso.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## 🔧 Desarrollo
+
+### Comandos disponibles
+
+```bash
+npm start          # Inicia el servidor de desarrollo
+npm run android    # Ejecuta en Android
+npm run ios        # Ejecuta en iOS
+npm run web        # Ejecuta en navegador
+npm run lint       # Ejecuta ESLint
+```
+
+### Configuración Bluetooth
+
+La aplicación requiere permisos de Bluetooth para funcionar. En Android, solicita permisos automáticamente. Para iOS, asegúrate de configurar los permisos en `app.json`.
+
+### Temas y colores
+
+Los colores están definidos en `constants/theme.ts` siguiendo las guías de Material Design 3.
+
+## 📚 Recursos adicionales
+
+- [Documentación de Expo](https://docs.expo.dev/)
+- [React Native BLE PLX](https://github.com/dotintent/react-native-ble-plx)
+- [Expo SQLite](https://docs.expo.dev/versions/latest/sdk/sqlite/)
+
+## 🤝 Contribuciones
+
+Las contribuciones son bienvenidas. Por favor, abre un issue primero para discutir cambios mayores.
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia MIT.
