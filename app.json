@@ -53,7 +53,10 @@
             "peripheral",
             "central"
           ],
-          "bluetoothAlwaysPermission": "Esta aplicación necesita conectarse a tus sensores del jardín"
+          "bluetoothAlwaysPermission": "Esta aplicación necesita conectarse a tus sensores del jardín",
+          "bluetoothAlwaysPermissionDescription": "Esta aplicación necesita Bluetooth para conectarse a tus sensores.",
+          "bluetoothScanPermissionDescription": "Esta aplicación necesita escanear dispositivos Bluetooth cercanos.",
+          "fineLocationPermissionDescription": "Se requiere tu ubicación para encontrar sensores Bluetooth cercanos."
         }
       ],
       "expo-sqlite"
