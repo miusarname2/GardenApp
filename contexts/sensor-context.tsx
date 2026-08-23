@@ -13,7 +13,7 @@ const SensorDataContext = createContext<UseSensorDataResult | null>(null);
 
 /**
  * Wraps the app with a single instance of useSensorData so all screens
- * share the same BLE connection and metrics state.
+ * share the same BLE connections and metrics state for all sensors.
  *
  * Place this in `_layout.tsx` around `<Stack>`.
  */
@@ -34,9 +34,16 @@ export function SensorDataProvider({ children }: { children: React.ReactNode }) 
 /**
  * Access sensor data from any component within the SensorDataProvider.
  *
- * @example
+ * ## Single-sensor (legacy) API:
  * ```tsx
  * const { metrics, connectionStatus, isMockData } = useSensorContext();
+ * // → always points to the active sensor
+ * ```
+ *
+ * ## Multi-sensor API:
+ * ```tsx
+ * const { allSensors, activeSensorId, setActiveSensor, addSensor, removeSensor } = useSensorContext();
+ * // → manage multiple sensors
  * ```
  */
 export function useSensorContext(): UseSensorDataResult {

@@ -43,10 +43,20 @@ export const SENSOR_COMMAND_CHARACTERISTIC_UUID = '0000FE02-0000-1000-8000-00805
 /** When 'true', the app ignores BLE and reads from SQLite seed/mock data */
 export const STORAGE_KEY_USE_MOCK_DATA = 'USE_MOCK_DATA';
 
-/** Stores the BLE device ID of the last successfully connected sensor */
+// ── Multi-sensor keys ───────────────────────────────────
+
+/** JSON array of saved sensors: SavedSensorInfo[] */
+export const STORAGE_KEY_CONNECTED_SENSORS = 'CONNECTED_SENSORS';
+
+/** The BLE device ID of the currently selected "active" sensor */
+export const STORAGE_KEY_ACTIVE_SENSOR_ID = 'ACTIVE_SENSOR_ID';
+
+// ── Legacy single-sensor keys (kept for migration) ──────
+
+/** @deprecated Use STORAGE_KEY_CONNECTED_SENSORS instead */
 export const STORAGE_KEY_CONNECTED_DEVICE_ID = 'CONNECTED_DEVICE_ID';
 
-/** Stores the human-readable name of the connected sensor */
+/** @deprecated Use STORAGE_KEY_CONNECTED_SENSORS instead */
 export const STORAGE_KEY_CONNECTED_DEVICE_NAME = 'CONNECTED_DEVICE_NAME';
 
 // ─────────────────────────────────────────────────────────
@@ -77,6 +87,38 @@ export interface SensorMetrics {
   humidity: number;    // 0-100 percentage
   batPanel: number;    // 0-100 percentage
   batSys: number;      // 0-100 percentage
+}
+
+/** BLE connection status for a single sensor */
+export type ConnectionStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'mock_mode'
+  | 'error';
+
+/**
+ * Minimal info persisted in AsyncStorage for each saved sensor.
+ * Stored as JSON array under STORAGE_KEY_CONNECTED_SENSORS.
+ */
+export interface SavedSensorInfo {
+  deviceId: string;
+  name: string;
+  /** SQLite `sensors.id` — null until the sensor is registered in the DB */
+  sensorDbId: number | null;
+}
+
+/**
+ * Runtime representation of a connected (or saved) sensor.
+ * Exposed by useSensorData via the `allSensors` array.
+ */
+export interface ConnectedSensor {
+  deviceId: string;
+  name: string;
+  sensorDbId: number | null;
+  status: ConnectionStatus;
+  metrics: SensorMetrics | null;
+  error: string | null;
 }
 
 /**

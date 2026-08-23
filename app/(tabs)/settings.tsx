@@ -11,7 +11,9 @@ import {
   Switch,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
+import { router } from "expo-router";
 import { Device } from "react-native-ble-plx";
 import { bleManager } from "@/constants/ble";
 import Animated, {
@@ -67,7 +69,18 @@ export default function SettingsScreen() {
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 6;
 
-  const { connectionStatus, isMockData, deviceName, error: sensorError, setMockMode, reconnect } = useSensorContext();
+  const {
+    connectionStatus,
+    isMockData,
+    deviceName,
+    error: sensorError,
+    setMockMode,
+    reconnect,
+    allSensors,
+    activeSensorId,
+    setActiveSensor,
+    removeSensor,
+  } = useSensorContext();
 
   const manager = bleManager;
   const scanTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -130,7 +143,7 @@ export default function SettingsScreen() {
     if (scanTimeout.current) clearTimeout(scanTimeout.current);
     scanTimeout.current = setTimeout(() => {
       stopScan();
-    }, 10000);
+    }, 10000) as unknown as NodeJS.Timeout;
   };
 
   const stopScan = () => {
@@ -227,7 +240,7 @@ export default function SettingsScreen() {
               value={isMockData}
               onValueChange={(useMock) => setMockMode(useMock)}
               trackColor={{ false: EcoColors.primary, true: EcoColors.outlineVariant }}
-              thumbColor={isMockData ? '#f4f3f4' : EcoColors.primaryFixed}
+              thumbColor={isMockData ? '#f4f3f4' : EcoColors.primaryContainer}
             />
           </View>
 
@@ -263,6 +276,74 @@ export default function SettingsScreen() {
             <ThemedText style={styles.errorText}>{sensorError}</ThemedText>
           )}
         </View>
+
+        {/* Connected Sensors List */}
+        {!isMockData && allSensors.length > 0 && (
+          <View style={styles.mySensorsSection}>
+            <View style={styles.sectionHeader}>
+              <ThemedText style={styles.sectionTitle}>Mis Sensores</ThemedText>
+            </View>
+            <View style={styles.deviceList}>
+              {allSensors.map((sensor) => {
+                const isActive = sensor.deviceId === activeSensorId;
+                return (
+                  <TouchableOpacity
+                    key={sensor.deviceId}
+                    style={[styles.deviceCard, isActive && styles.deviceCardActive]}
+                    onPress={() => setActiveSensor(sensor.deviceId)}
+                  >
+                    <View style={styles.deviceInfo}>
+                      <View style={styles.deviceIconContainer}>
+                        <MaterialIcons
+                          name="sensors"
+                          size={24}
+                          color={isActive ? EcoColors.primary : EcoColors.outline}
+                        />
+                      </View>
+                      <View>
+                        <ThemedText style={styles.deviceName}>
+                          {sensor.name}
+                        </ThemedText>
+                        <ThemedText style={styles.deviceStatus}>
+                          ID: {sensor.deviceId}
+                        </ThemedText>
+                      </View>
+                    </View>
+                    <View style={styles.deviceAction}>
+                      <View
+                        style={[
+                          styles.statusDot,
+                          {
+                            backgroundColor:
+                              sensor.status === "connected"
+                                ? "#4CAF50"
+                                : sensor.status === "connecting"
+                                ? "#FFC107"
+                                : "#F44336",
+                          },
+                        ]}
+                      />
+                      <TouchableOpacity
+                        onPress={() => {
+                          Alert.alert(
+                            "Eliminar Sensor",
+                            `¿Estás seguro de que deseas eliminar ${sensor.name}?`,
+                            [
+                              { text: "Cancelar", style: "cancel" },
+                              { text: "Eliminar", style: "destructive", onPress: () => removeSensor(sensor.deviceId) },
+                            ]
+                          );
+                        }}
+                      >
+                        <MaterialIcons name="delete-outline" size={20} color={EcoColors.outline} />
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         {/* Connection Visualizer */}
         <View style={styles.visualizerSection}>
@@ -362,11 +443,18 @@ export default function SettingsScreen() {
                     )}
                     color={EcoColors.primary}
                   />
-                  <MaterialIcons
-                    name="chevron-right"
-                    size={24}
-                    color={EcoColors.outline}
-                  />
+                  <TouchableOpacity
+                    style={styles.pageBtn}
+                    onPress={() => {
+                      // Navigate to onboarding to add a new sensor
+                      router.push({
+                        pathname: "/bluetooth-onboarding",
+                        params: { deviceId: device.id, name: device.name },
+                      });
+                    }}
+                  >
+                    <MaterialIcons name="add" size={24} color={EcoColors.primary} />
+                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             ))}
@@ -410,7 +498,7 @@ export default function SettingsScreen() {
         {/* Connectivity Guide */}
         <View style={styles.guideCard}>
           <LinearGradient
-            colors={[EcoColors.tertiaryFixed, "#beebe7"]}
+            colors={[EcoColors.primaryContainer, "#beebe7"]}
             style={styles.guideGradient}
           >
             <View style={styles.guideContent}>
@@ -478,7 +566,91 @@ const SignalBars = ({ level, color }: { level: number; color: string }) => (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: EcoColors.background,
+    backgroundColor: "#F9FAF9",
+  },
+  dataSourceSection: {
+    backgroundColor: "white",
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  dataSourceHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  dataSourceInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  dataSourceIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: EcoColors.surfaceContainerLow,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 16,
+  },
+  dataSourceTitle: {
+    fontFamily: "Manrope_700Bold",
+    fontSize: 16,
+    color: "#171d14",
+    marginBottom: 4,
+  },
+  dataSourceDesc: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: EcoColors.outline,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E1E3DF",
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  statusText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    color: "#171d14",
+    flex: 1,
+  },
+  reconnectBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: EcoColors.primaryContainer,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  reconnectText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: EcoColors.primary,
+  },
+  errorText: {
+    marginTop: 12,
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: "#F44336",
+  },
+  mySensorsSection: {
+    marginBottom: 32,
   },
   topBar: {
     backgroundColor: "#eff6e7",
@@ -587,7 +759,7 @@ const styles = StyleSheet.create({
   countBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: EcoColors.primaryFixed,
+    backgroundColor: EcoColors.primaryContainer,
     borderRadius: 99,
   },
   countText: {

@@ -36,7 +36,7 @@ const formatDate = (isoString: string) => {
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const [selectedRange, setSelectedRange] = useState<'Día' | 'Semana'>('Día');
-  const { metrics: liveMetrics, connectionStatus } = useSensorContext();
+  const { metrics: liveMetrics, connectionStatus, allSensors, activeSensorId } = useSensorContext();
   const [stats, setStats] = useState({ hydration: 88, exposure: 6.2, growthDiff: 12.4 });
   const [events, setEvents] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
@@ -60,12 +60,22 @@ export default function ExploreScreen() {
         const daysLimit = selectedRange === 'Día' ? 7 : 30;
         const cutoff = new Date(Date.now() - (daysLimit * 24 * 60 * 60 * 1000)).toISOString();
 
+        // Get active sensor DB ID
+        const activeSensor = allSensors.find(s => s.deviceId === activeSensorId);
+        const sensorDbId = activeSensor?.sensorDbId;
+
+        // Build the WHERE clause to handle either the specific sensor or legacy data (sensor_id IS NULL)
+        const sensorCondition = sensorDbId != null 
+          ? `(sensor_id = ? OR sensor_id IS NULL)` 
+          : `sensor_id IS NULL`;
+        const params = sensorDbId != null ? [cutoff, sensorDbId] : [cutoff];
+
         const metricsSql = `
            SELECT AVG(hydration) as h, AVG(exposure) as e, MIN(growth_index) as min_g, MAX(growth_index) as max_g
            FROM metrics
-           WHERE created_at >= ?
+           WHERE created_at >= ? AND ${sensorCondition}
          `;
-        const metricsRes = db.getFirstSync<any>(metricsSql, [cutoff]);
+        const metricsRes = db.getFirstSync<any>(metricsSql, params);
 
         if (metricsRes) {
           const diff = ((metricsRes.max_g || 0) - (metricsRes.min_g || 0));
@@ -80,19 +90,19 @@ export default function ExploreScreen() {
 
         const eventsSql = `
            SELECT * FROM history
-           WHERE created_at >= ?
+           WHERE created_at >= ? AND ${sensorCondition}
            ORDER BY created_at DESC
          `;
-        const eventsRes = db.getAllSync<any>(eventsSql, [cutoff]);
+        const eventsRes = db.getAllSync<any>(eventsSql, params);
         setEvents(eventsRes);
 
         const chartSql = `
            SELECT created_at, growth_index 
            FROM metrics 
-           WHERE created_at >= ? 
+           WHERE created_at >= ? AND ${sensorCondition}
            ORDER BY created_at ASC
          `;
-        const chartRes = db.getAllSync<any>(chartSql, [cutoff]);
+        const chartRes = db.getAllSync<any>(chartSql, params);
 
         setChartData(chartRes.length > 0 ? chartRes : [{ growth_index: 0 }, { growth_index: 1 }]);
       } catch (error) {
@@ -101,7 +111,7 @@ export default function ExploreScreen() {
     };
 
     fetchMetrics();
-  }, [selectedRange, liveMetrics]);
+  }, [selectedRange, liveMetrics, allSensors, activeSensorId]);
 
   const toggleRange = (range: 'Día' | 'Semana') => {
     if (selectedRange === range) return;
@@ -178,7 +188,7 @@ export default function ExploreScreen() {
                   const heightPct = Math.max(10, ((d.growth_index || 0) / maxVal) * 100);
                   return (
                     <View key={"bar-" + i} style={styles.chartBarWrapper}>
-                      <View style={[styles.chartBar, { height: heightPct + '%' }]} />
+                      <View style={[styles.chartBar, { height: `${heightPct}%` as any }]} />
                     </View>
                   );
                 })}
@@ -495,8 +505,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   chartBarWrapper: {
-    flex: 1,
-    height: '100%',
+    height: '100%' as any,
     justifyContent: 'flex-end',
     alignItems: 'center',
     marginHorizontal: 4,

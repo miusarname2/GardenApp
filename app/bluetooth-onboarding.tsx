@@ -8,8 +8,6 @@ import { Device } from 'react-native-ble-plx';
 import {
   bleManager,
   SENSOR_SERVICE_UUID,
-  STORAGE_KEY_CONNECTED_DEVICE_ID,
-  STORAGE_KEY_CONNECTED_DEVICE_NAME,
   STORAGE_KEY_USE_MOCK_DATA,
 } from '@/constants/ble';
 import * as ExpoDevice from 'expo-device';
@@ -19,6 +17,7 @@ import { Button } from '@/components/Button';
 import { EcoColors } from '@/constants/theme';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSensorContext } from '@/contexts/sensor-context';
 
 const PulseRing = ({ delay = 0, size = 300, color = EcoColors.primary + '20' }) => {
   const scale = useSharedValue(0.33);
@@ -153,6 +152,7 @@ export default function BluetoothOnboardingScreen() {
     }, 15000);
   };
 
+  const { addSensor } = useSensorContext();
   const [isConnecting, setIsConnecting] = useState(false);
 
   const handleConnect = async () => {
@@ -163,15 +163,13 @@ export default function BluetoothOnboardingScreen() {
     setIsConnecting(true);
     
     try {
-      // 1. Connect to the selected device
+      // 1. Quick connect to verify the device is reachable
       const device = await bleManager.connectToDevice(selectedDeviceId, {
         requestMTU: 256,
       });
 
-      // 2. Discover services & characteristics
+      // 2. Discover services to verify it's a garden sensor
       await device.discoverAllServicesAndCharacteristics();
-
-      // 3. Verify the garden sensor service exists
       const services = await device.services();
       const hasGardenService = services.some(
         (s) => s.uuid.toUpperCase() === SENSOR_SERVICE_UUID.toUpperCase(),
@@ -183,15 +181,15 @@ export default function BluetoothOnboardingScreen() {
         );
       }
 
-      // 4. Persist device info
-      await AsyncStorage.setItem(STORAGE_KEY_CONNECTED_DEVICE_ID, device.id);
-      if (device.name) {
-        await AsyncStorage.setItem(STORAGE_KEY_CONNECTED_DEVICE_NAME, device.name);
-      }
-      await AsyncStorage.setItem(STORAGE_KEY_USE_MOCK_DATA, 'false');
-      await AsyncStorage.setItem('isOnboardingCompleted', 'true');
+      // 3. Disconnect — addSensor will handle the full lifecycle connection
+      await bleManager.cancelDeviceConnection(selectedDeviceId);
 
-      // 5. Navigate to tabs
+      // 4. Delegate to multi-sensor context (persists, registers in DB, connects)
+      const deviceName = device.name || `Sensor ${selectedDeviceId.slice(-4)}`;
+      await addSensor(selectedDeviceId, deviceName);
+
+      // 5. Mark onboarding as completed and navigate
+      await AsyncStorage.setItem('isOnboardingCompleted', 'true');
       router.replace('/(tabs)');
     } catch (err: any) {
       console.warn('[Onboarding] Connection failed:', err);
