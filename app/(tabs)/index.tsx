@@ -5,42 +5,27 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 
-
 import { ThemedText } from '@/components/themed-text';
 import { PlantHealthCard } from '@/components/PlantHealthCard';
 import { EcoColors } from '@/constants/theme';
 import { getDb } from '@/db';
+import { useSensorContext } from '@/contexts/sensor-context';
 
 const { width } = Dimensions.get('window');
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const [metrics, setMetrics] = useState<any>(null);
+  const { metrics, connectionStatus, isMockData } = useSensorContext();
   const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
     try {
       const db = getDb();
-      
-      // Fetch latest metrics
-      const latestMetrics = db.getFirstSync<any>('SELECT * FROM metrics ORDER BY created_at DESC LIMIT 1');
-      if (latestMetrics) {
-        setMetrics({
-          hydration: latestMetrics.hydration,
-          light: latestMetrics.exposure * 300, 
-          temp: latestMetrics.temperature,
-          humidity: latestMetrics.humidity,
-          batPanel: latestMetrics.battery_panel,
-          batSys: latestMetrics.battery_system
-        });
-      }
-
-      // Fetch latest 3 history events for timeline
+      // Fetch latest 3 history events for timeline (always from SQLite)
       const events = db.getAllSync<any>('SELECT * FROM history ORDER BY created_at DESC LIMIT 3');
       setHistory(events);
     } catch (error) {
        console.warn('Dashboard DB Error:', error);
-       // Falls back to initial state
     }
   }, []);
 
@@ -59,14 +44,14 @@ export default function DashboardScreen() {
             <ThemedText style={styles.headerTitle}>Digital Garden</ThemedText>
           </View>
           <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/settings')}>
-             <MaterialIcons name="bluetooth-connected" size={22} color={EcoColors.outline} />
+             <MaterialIcons name={connectionStatus === 'connected' ? 'bluetooth-connected' : 'bluetooth-disabled'} size={22} color={connectionStatus === 'connected' ? EcoColors.primary : EcoColors.outline} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Plant Hero Card + Metrics Grid (Consolidated in Component) */}
-        <PlantHealthCard metrics={metrics} />
+        <PlantHealthCard metrics={metrics ?? undefined} />
 
         {/* Recent Growth Section */}
         <View style={styles.timelineSection}>

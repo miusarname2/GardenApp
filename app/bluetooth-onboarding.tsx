@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, Platform, PermissionsAndroid, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Platform, PermissionsAndroid, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withDelay, Easing, withSequence } from 'react-native-reanimated';
 import { Device } from 'react-native-ble-plx';
-import { bleManager } from '@/constants/ble';
+import {
+  bleManager,
+  SENSOR_SERVICE_UUID,
+  STORAGE_KEY_CONNECTED_DEVICE_ID,
+  STORAGE_KEY_CONNECTED_DEVICE_NAME,
+  STORAGE_KEY_USE_MOCK_DATA,
+} from '@/constants/ble';
 import * as ExpoDevice from 'expo-device';
 
 import { ThemedText } from '@/components/themed-text';
@@ -147,18 +153,69 @@ export default function BluetoothOnboardingScreen() {
     }, 15000);
   };
 
+  const [isConnecting, setIsConnecting] = useState(false);
+
   const handleConnect = async () => {
     if (!selectedDeviceId) return;
     
     bleManager.stopDeviceScan();
     setIsScanning(false);
+    setIsConnecting(true);
     
-    // Guardar que el onboarding fue completado
-    await AsyncStorage.setItem('isOnboardingCompleted', 'true');
-    
-    // Aquí puedes añadir logic tipo `await bleManager.connectToDevice(selectedDeviceId)`
-    // Para prototipo, saltamos al (tabs) directamente asumiendo conexión existosa
-    router.replace('/(tabs)');
+    try {
+      // 1. Connect to the selected device
+      const device = await bleManager.connectToDevice(selectedDeviceId, {
+        requestMTU: 256,
+      });
+
+      // 2. Discover services & characteristics
+      await device.discoverAllServicesAndCharacteristics();
+
+      // 3. Verify the garden sensor service exists
+      const services = await device.services();
+      const hasGardenService = services.some(
+        (s) => s.uuid.toUpperCase() === SENSOR_SERVICE_UUID.toUpperCase(),
+      );
+
+      if (!hasGardenService) {
+        console.warn(
+          '[Onboarding] Device does not expose the garden sensor service. Proceeding anyway.',
+        );
+      }
+
+      // 4. Persist device info
+      await AsyncStorage.setItem(STORAGE_KEY_CONNECTED_DEVICE_ID, device.id);
+      if (device.name) {
+        await AsyncStorage.setItem(STORAGE_KEY_CONNECTED_DEVICE_NAME, device.name);
+      }
+      await AsyncStorage.setItem(STORAGE_KEY_USE_MOCK_DATA, 'false');
+      await AsyncStorage.setItem('isOnboardingCompleted', 'true');
+
+      // 5. Navigate to tabs
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      console.warn('[Onboarding] Connection failed:', err);
+      Alert.alert(
+        'Error de conexión',
+        `No se pudo conectar al sensor: ${err?.message || 'Error desconocido'}.\n\n¿Deseas continuar con datos de demostración?`,
+        [
+          {
+            text: 'Reintentar',
+            style: 'cancel',
+          },
+          {
+            text: 'Continuar sin sensor',
+            onPress: async () => {
+              await AsyncStorage.setItem(STORAGE_KEY_USE_MOCK_DATA, 'true');
+              await AsyncStorage.setItem('isOnboardingCompleted', 'true');
+              router.replace('/(tabs)');
+            },
+          },
+        ],
+      );
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   return (
@@ -257,12 +314,12 @@ export default function BluetoothOnboardingScreen() {
       {/* Footer Actions */}
       <View style={styles.footer}>
         <Button
-          title="Conectar"
+          title={isConnecting ? "Conectando..." : "Conectar"}
           onPress={handleConnect}
           variant="primary"
           size="large"
-          disabled={!selectedDeviceId}
-          style={{ marginBottom: 16, opacity: !selectedDeviceId ? 0.6 : 1 }}
+          disabled={!selectedDeviceId || isConnecting}
+          style={{ marginBottom: 16, opacity: (!selectedDeviceId || isConnecting) ? 0.6 : 1 }}
         />
         <Button
           title="Buscar de nuevo"

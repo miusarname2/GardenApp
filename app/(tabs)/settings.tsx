@@ -8,6 +8,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -24,6 +25,7 @@ import Animated, {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import { EcoColors } from "@/constants/theme";
+import { useSensorContext } from "@/contexts/sensor-context";
 
 const { width } = Dimensions.get("window");
 
@@ -64,6 +66,8 @@ export default function SettingsScreen() {
   const [devices, setDevices] = useState<Record<string, Device>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 6;
+
+  const { connectionStatus, isMockData, deviceName, error: sensorError, setMockMode, reconnect } = useSensorContext();
 
   const manager = bleManager;
   const scanTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -183,9 +187,9 @@ export default function SettingsScreen() {
             }
           >
             <MaterialIcons
-              name="bluetooth-connected"
+              name={connectionStatus === 'connected' ? 'bluetooth-connected' : 'bluetooth-disabled'}
               size={24}
-              color={EcoColors.primary}
+              color={connectionStatus === 'connected' ? EcoColors.primary : EcoColors.outline}
             />
           </TouchableOpacity>
         </View>
@@ -195,6 +199,71 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Data Source Toggle */}
+        <View style={styles.dataSourceSection}>
+          <View style={styles.dataSourceHeader}>
+            <View style={styles.dataSourceInfo}>
+              <View style={styles.dataSourceIconWrap}>
+                <MaterialIcons
+                  name={isMockData ? 'science' : 'sensors'}
+                  size={24}
+                  color={isMockData ? EcoColors.outline : EcoColors.primary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.dataSourceTitle}>
+                  {isMockData ? 'Datos de Demostración' : 'Sensor en Vivo'}
+                </ThemedText>
+                <ThemedText style={styles.dataSourceDesc}>
+                  {isMockData
+                    ? 'Usando datos simulados de SQLite'
+                    : deviceName
+                      ? `Conectado a: ${deviceName}`
+                      : 'Intentando conectar al sensor...'}
+                </ThemedText>
+              </View>
+            </View>
+            <Switch
+              value={isMockData}
+              onValueChange={(useMock) => setMockMode(useMock)}
+              trackColor={{ false: EcoColors.primary, true: EcoColors.outlineVariant }}
+              thumbColor={isMockData ? '#f4f3f4' : EcoColors.primaryFixed}
+            />
+          </View>
+
+          {/* Connection Status Indicator */}
+          <View style={styles.statusRow}>
+            <View style={[
+              styles.statusDot,
+              {
+                backgroundColor:
+                  connectionStatus === 'connected' ? '#4CAF50' :
+                  connectionStatus === 'connecting' ? '#FFC107' :
+                  connectionStatus === 'mock_mode' ? EcoColors.outline :
+                  connectionStatus === 'error' ? '#F44336' :
+                  EcoColors.outlineVariant,
+              },
+            ]} />
+            <ThemedText style={styles.statusText}>
+              {connectionStatus === 'connected' ? 'Conectado' :
+               connectionStatus === 'connecting' ? 'Conectando...' :
+               connectionStatus === 'mock_mode' ? 'Modo demostración' :
+               connectionStatus === 'error' ? 'Error de conexión' :
+               'Desconectado'}
+            </ThemedText>
+            {(connectionStatus === 'disconnected' || connectionStatus === 'error') && !isMockData && (
+              <TouchableOpacity onPress={reconnect} style={styles.reconnectBtn}>
+                <MaterialIcons name="refresh" size={16} color={EcoColors.primary} />
+                <ThemedText style={styles.reconnectText}>Reconectar</ThemedText>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {sensorError && (
+            <ThemedText style={styles.errorText}>{sensorError}</ThemedText>
+          )}
+        </View>
+
         {/* Connection Visualizer */}
         <View style={styles.visualizerSection}>
           <View style={styles.pulseContainer}>

@@ -7,6 +7,7 @@ import { Dimensions, LayoutAnimation, Platform, ScrollView, StyleSheet, Touchabl
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { getDb } from '@/db';
+import { useSensorContext } from '@/contexts/sensor-context';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CHART_WIDTH = SCREEN_WIDTH - 96; // 24 outer padding * 2 + 24 inner padding * 2
@@ -35,17 +36,27 @@ const formatDate = (isoString: string) => {
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const [selectedRange, setSelectedRange] = useState<'Día' | 'Semana'>('Día');
+  const { metrics: liveMetrics, connectionStatus } = useSensorContext();
   const [stats, setStats] = useState({ hydration: 88, exposure: 6.2, growthDiff: 12.4 });
   const [events, setEvents] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
 
+  // Update current stats from live BLE metrics when available
   useEffect(() => {
-    const db = getDb();
+    if (liveMetrics) {
+      setStats((prev) => ({
+        ...prev,
+        hydration: liveMetrics.hydration,
+        exposure: Number((liveMetrics.light / 300).toFixed(1)), // reverse the light→exposure transform
+      }));
+    }
+  }, [liveMetrics]);
+
+  // Historical data (chart + timeline) always comes from SQLite
+  useEffect(() => {
     const fetchMetrics = () => {
       try {
         const db = getDb();
-        // "Día" -> Últimos 7 días (Gráfico de barras)
-        // "Semana" -> Últimas 3-6 semanas (Gráfico de línea - pedimos últimos 30 días para trazar la curva)
         const daysLimit = selectedRange === 'Día' ? 7 : 30;
         const cutoff = new Date(Date.now() - (daysLimit * 24 * 60 * 60 * 1000)).toISOString();
 
@@ -59,11 +70,12 @@ export default function ExploreScreen() {
         if (metricsRes) {
           const diff = ((metricsRes.max_g || 0) - (metricsRes.min_g || 0));
 
-          setStats({
-            hydration: Math.round(metricsRes.h || 88),
-            exposure: Number((metricsRes.e || 6.2).toFixed(1)),
+          setStats((prev) => ({
+            // Keep live hydration/exposure if available, fall back to DB averages
+            hydration: liveMetrics?.hydration ?? Math.round(metricsRes.h || 88),
+            exposure: liveMetrics ? Number((liveMetrics.light / 300).toFixed(1)) : Number((metricsRes.e || 6.2).toFixed(1)),
             growthDiff: Number(diff.toFixed(1)) || 1.2,
-          });
+          }));
         }
 
         const eventsSql = `
@@ -82,7 +94,6 @@ export default function ExploreScreen() {
          `;
         const chartRes = db.getAllSync<any>(chartSql, [cutoff]);
 
-        // Filter empty arrays to at least have a flatline prevent crash
         setChartData(chartRes.length > 0 ? chartRes : [{ growth_index: 0 }, { growth_index: 1 }]);
       } catch (error) {
         console.warn('Explore DB Error:', error);
@@ -90,7 +101,7 @@ export default function ExploreScreen() {
     };
 
     fetchMetrics();
-  }, [selectedRange]);
+  }, [selectedRange, liveMetrics]);
 
   const toggleRange = (range: 'Día' | 'Semana') => {
     if (selectedRange === range) return;
@@ -106,7 +117,7 @@ export default function ExploreScreen() {
           <ThemedText style={styles.headerTitle}>Historial</ThemedText>
         </View>
         <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/settings')}>
-          <MaterialIcons name="bluetooth-connected" size={24} color="#2e7d32" />
+          <MaterialIcons name={connectionStatus === 'connected' ? 'bluetooth-connected' : 'bluetooth-disabled'} size={24} color={connectionStatus === 'connected' ? '#2e7d32' : '#707a6c'} />
         </TouchableOpacity>
       </View>
 
