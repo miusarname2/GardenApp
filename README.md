@@ -15,6 +15,14 @@ GardenApp conecta sensores inalámbricos colocados en tus plantas para recopilar
 - **Escaneo Bluetooth**: Descubre y conecta sensores BLE cercanos
 - **Base de datos local**: Almacena datos usando SQLite para funcionamiento offline
 - **Interfaz intuitiva**: Diseño moderno con navegación por pestañas
+- **Widgets personalizables**: Cambia el orden, nombre y visibilidad de las tarjetas de Dashboard e Historial
+- **Perfil de planta editable**: Guarda el nombre, la especie y una foto predefinida o una imagen propia mediante URL/URI
+
+### Personalización del Dashboard e Historial
+
+Pulsa el icono de ajustes en Dashboard o Historial para editar el perfil de la planta y las tarjetas de cada pantalla. Puedes renombrar, ocultar y reordenar widgets; el cambio de orden se realiza con las flechas de cada tarjeta. En Historial, Growth Index es un widget independiente y se puede colocar en la posición que prefieras.
+
+Las preferencias se guardan en el almacenamiento local del dispositivo. No requieren cambios ni migraciones en SQLite, por lo que las métricas y eventos existentes se conservan. Para una foto propia, pega una URL o URI de imagen; la aplicación la recorta visualmente para adaptarla al espacio disponible.
 
 ## 📦 Instalación
 
@@ -59,10 +67,11 @@ GardenApp/
 │   │   ├── index.tsx      # Dashboard principal
 │   │   ├── explore.tsx    # Historial y gráficos
 │   │   └── settings.tsx   # Configuración y escaneo BLE
+│   ├── widget-settings.tsx # Personalización de planta y widgets
 │   ├── bluetooth-onboarding.tsx  # Tutorial de conexión
 │   └── _layout.tsx        # Layout raíz
 ├── components/            # Componentes reutilizables
-│   └── PlantHealthCard.tsx # Tarjeta de métricas
+│   └── PlantHealthCard.tsx # Perfil visual de la planta
 ├── constants/             # Configuraciones y temas
 ├── db/                    # Base de datos SQLite
 │   └── index.ts          # Configuración y seeding

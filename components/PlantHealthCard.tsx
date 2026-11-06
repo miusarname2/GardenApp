@@ -1,4 +1,3 @@
-import { MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import React from 'react';
@@ -6,51 +5,39 @@ import { StyleSheet, View, ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { EcoColors } from '@/constants/theme';
-
-import Animated, { useAnimatedStyle, withDelay, withTiming } from 'react-native-reanimated';
+import { getPlantImageSource } from '@/constants/plant-images';
 
 interface PlantHealthCardProps {
   style?: ViewStyle;
-  metrics?: {
-    hydration: number;
-    light: number;
-    temp: number;
-    humidity: number;
-    batPanel: number;
-    batSys: number;
-  };
+  plantName?: string;
+  plantSpecies?: string;
+  plantImage?: string;
+  widgetTitle?: string;
 }
 
-export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
-  // Default values if no metrics provided
-  const data = metrics || {
-    hydration: 68,
-    light: 1200,
-    temp: 24,
-    humidity: 52,
-    batPanel: 92,
-    batSys: 78
-  };
-
-  const progressStyle = useAnimatedStyle(() => ({
-    width: withDelay(300, withTiming(`${data.hydration}%`, { duration: 1000 })),
-  }));
-
+export const PlantHealthCard = ({
+  style,
+  plantName = 'Fiddle Leaf Fig',
+  plantSpecies = 'Ficus lyrata',
+  plantImage = 'garden',
+  widgetTitle = 'CURRENT PLANT',
+}: PlantHealthCardProps) => {
   return (
     <View style={style}>
-      {/* Hero Section */}
       <View style={styles.heroContainer}>
         <Image
-          source={require('../assets/images/unnamed.png')}
+          source={getPlantImageSource(plantImage)}
           style={styles.heroImage}
           contentFit="cover"
         />
 
-        {/* Floating ID Badge */}
         <BlurView intensity={80} tint="light" style={styles.floatingBadge}>
           <View>
-            <ThemedText type="labelSmall" style={styles.badgeLabel}>CURRENT PLANT</ThemedText>
-            <ThemedText type="headlineMedium" style={styles.badgeTitle}>Fiddle Leaf Fig</ThemedText>
+            <ThemedText type="labelSmall" style={styles.badgeLabel}>{widgetTitle}</ThemedText>
+            <ThemedText type="headlineMedium" style={styles.badgeTitle}>{plantName}</ThemedText>
+            {plantSpecies.length > 0 && (
+              <ThemedText style={styles.badgeSpecies}>{plantSpecies}</ThemedText>
+            )}
           </View>
           <View style={styles.statusPill}>
             <ThemedText type="labelSmall" style={styles.statusPillText}>HEALTHY</ThemedText>
@@ -58,85 +45,9 @@ export const PlantHealthCard = ({ style, metrics }: PlantHealthCardProps) => {
         </BlurView>
       </View>
 
-      {/* Editorial Headline */}
       <View style={styles.editorialHeader}>
         <ThemedText type="labelSmall" style={styles.sectionLabel}>REAL-TIME METRICS</ThemedText>
         <ThemedText type="headlineLarge" style={styles.sectionTitle}>Huerto Digital</ThemedText>
-      </View>
-
-      {/* Stats Bento Grid */}
-      <View style={styles.gridContainer}>
-
-        {/* Hydration Card */}
-        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerLow }]}>
-          <View>
-            <MaterialIcons name="water-drop" size={24} color={EcoColors.primary} style={styles.cardIcon} />
-            <ThemedText style={styles.cardSubtitle}>Hydration</ThemedText>
-          </View>
-          <View style={styles.cardBottom}>
-            <ThemedText style={styles.cardValue}>{data.hydration}%</ThemedText>
-            <View style={styles.progressBarBg}>
-              <Animated.View style={[styles.progressBarFill, progressStyle]} />
-            </View>
-          </View>
-        </View>
-
-        {/* Light Card */}
-        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerHighest }]}>
-          <View>
-            <MaterialIcons name="light-mode" size={24} color={EcoColors.tertiary} style={styles.cardIcon} />
-            <ThemedText style={styles.cardSubtitle}>Light Level</ThemedText>
-          </View>
-          <View style={styles.cardBottom}>
-            <ThemedText style={styles.cardValue}>{(data.light / 1000).toFixed(1)}k</ThemedText>
-            <ThemedText style={styles.cardDetail}>LUX • OPTIMAL</ThemedText>
-          </View>
-        </View>
-
-        {/* Temp Card */}
-        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerHigh }]}>
-          <View>
-            <MaterialIcons name="thermostat" size={24} color={EcoColors.error} style={styles.cardIcon} />
-            <ThemedText style={styles.cardSubtitle}>Temp</ThemedText>
-          </View>
-          <View style={styles.cardBottom}>
-            <ThemedText style={styles.cardValue}>{data.temp}°C</ThemedText>
-          </View>
-        </View>
-
-        {/* Humidity Card */}
-        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainer }]}>
-          <View>
-            <MaterialIcons name="waves" size={24} color={EcoColors.secondary} style={styles.cardIcon} />
-            <ThemedText style={styles.cardSubtitle}>Humidity</ThemedText>
-          </View>
-          <View style={styles.cardBottom}>
-            <ThemedText style={styles.cardValue}>{data.humidity}%</ThemedText>
-          </View>
-        </View>
-
-        {/* Batería de Panel Card */}
-        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerLow }]}>
-          <View>
-            <MaterialIcons name="solar-power" size={24} color={EcoColors.primary} style={styles.cardIcon} />
-            <ThemedText style={styles.cardSubtitle}>Batería de Panel</ThemedText>
-          </View>
-          <View style={styles.cardBottom}>
-            <ThemedText style={styles.cardValue}>{data.batPanel}%</ThemedText>
-          </View>
-        </View>
-
-        {/* Batería de Sistema Card */}
-        <View style={[styles.bentoCard, { backgroundColor: EcoColors.surfaceContainerHighest }]}>
-          <View>
-            <MaterialIcons name="battery-full" size={24} color={EcoColors.tertiary} style={styles.cardIcon} />
-            <ThemedText style={styles.cardSubtitle}>Batería de Sistema</ThemedText>
-          </View>
-          <View style={styles.cardBottom}>
-            <ThemedText style={styles.cardValue}>{data.batSys}%</ThemedText>
-          </View>
-        </View>
-
       </View>
     </View>
   );
@@ -187,6 +98,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#171d14',
   },
+  badgeSpecies: {
+    fontSize: 12,
+    color: '#707a6c',
+    marginTop: 2,
+  },
   statusPill: {
     backgroundColor: 'rgba(32, 98, 35, 0.1)',
     paddingHorizontal: 12,
@@ -218,57 +134,5 @@ const styles = StyleSheet.create({
     color: '#171d14',
     letterSpacing: -0.5,
     marginTop: 4,
-  },
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  bentoCard: {
-    width: '47.5%', // Half slightly reduced for the gap
-    aspectRatio: 1,
-    borderRadius: 24,
-    padding: 20,
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  cardIcon: {
-    marginBottom: 8,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#707a6c',
-  },
-  cardBottom: {
-    marginTop: 'auto',
-  },
-  cardValue: {
-    fontFamily: 'Manrope_800ExtraBold',
-    fontSize: 32,
-    color: '#171d14',
-    letterSpacing: -1,
-  },
-  cardDetail: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    color: '#707a6c',
-    marginTop: 4,
-  },
-  progressBarBg: {
-    width: '100%',
-    height: 6,
-    backgroundColor: '#cbd8c2',
-    borderRadius: 3,
-    marginTop: 12,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#206223',
-    borderRadius: 3,
   },
 });

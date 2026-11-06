@@ -3,18 +3,41 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Dimensions, LayoutAnimation, Platform, ScrollView, StyleSheet, TouchableOpacity, UIManager, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Dimensions,
+  LayoutAnimation,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  UIManager,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
+import { getPlantImageSource } from '@/constants/plant-images';
 import { getDb } from '@/db';
 import { useSensorContext } from '@/contexts/sensor-context';
+import { useWidgetPreferences, WidgetItem } from '@/contexts/widget-preferences-context';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const CHART_WIDTH = SCREEN_WIDTH - 96; // 24 outer padding * 2 + 24 inner padding * 2
+const CHART_WIDTH = SCREEN_WIDTH - 96;
 const CHART_HEIGHT = 100;
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+interface HistoryEvent {
+  id: number;
+  action: string;
+  details: string;
+  created_at: string;
+}
+
+interface ChartPoint {
+  created_at?: string;
+  growth_index: number | null;
 }
 
 const formatDate = (isoString: string) => {
@@ -23,94 +46,81 @@ const formatDate = (isoString: string) => {
   const now = new Date();
   const dDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const nDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diffTime = nDay.getTime() - dDay.getTime();
-  const diffDays = diffTime / (1000 * 60 * 60 * 24);
+  const diffDays = (nDay.getTime() - dDay.getTime()) / (1000 * 60 * 60 * 24);
 
   if (diffDays === 0) return 'HOY';
   if (diffDays === 1) return 'AYER';
 
-  const monthNames = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+  const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
   return `${date.getDate()} ${monthNames[date.getMonth()]}`;
 };
 
 export default function ExploreScreen() {
-  const insets = useSafeAreaInsets();
   const [selectedRange, setSelectedRange] = useState<'Día' | 'Semana'>('Día');
   const { metrics: liveMetrics, connectionStatus, allSensors, activeSensorId } = useSensorContext();
-  const [stats, setStats] = useState({ hydration: 88, exposure: 6.2, growthDiff: 12.4 });
-  const [events, setEvents] = useState<any[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
+  const { preferences } = useWidgetPreferences();
+  const [stats, setStats] = useState({ hydration: 88, exposure: 6.2, growthDiff: 12.4, temperature: 24, humidity: 52 });
+  const [events, setEvents] = useState<HistoryEvent[]>([]);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
 
-  // Update current stats from live BLE metrics when available
   useEffect(() => {
     if (liveMetrics) {
-      setStats((prev) => ({
-        ...prev,
+      setStats((previous) => ({
+        ...previous,
         hydration: liveMetrics.hydration,
-        exposure: Number((liveMetrics.light / 300).toFixed(1)), // reverse the light→exposure transform
+        exposure: Number((liveMetrics.light / 300).toFixed(1)),
+        temperature: liveMetrics.temp,
+        humidity: liveMetrics.humidity,
       }));
     }
   }, [liveMetrics]);
 
-  // Historical data (chart + timeline) always comes from SQLite
   useEffect(() => {
-    const fetchMetrics = () => {
-      try {
-        const db = getDb();
-        const daysLimit = selectedRange === 'Día' ? 7 : 30;
-        const cutoff = new Date(Date.now() - (daysLimit * 24 * 60 * 60 * 1000)).toISOString();
+    try {
+      const db = getDb();
+      const daysLimit = selectedRange === 'Día' ? 7 : 30;
+      const cutoff = new Date(Date.now() - daysLimit * 24 * 60 * 60 * 1000).toISOString();
+      const activeSensor = allSensors.find((sensor) => sensor.deviceId === activeSensorId);
+      const sensorDbId = activeSensor?.sensorDbId;
+      const sensorCondition = sensorDbId != null ? '(sensor_id = ? OR sensor_id IS NULL)' : 'sensor_id IS NULL';
+      const params = sensorDbId != null ? [cutoff, sensorDbId] : [cutoff];
 
-        // Get active sensor DB ID
-        const activeSensor = allSensors.find(s => s.deviceId === activeSensorId);
-        const sensorDbId = activeSensor?.sensorDbId;
+      const metricsRes = db.getFirstSync<{
+        h: number | null;
+        e: number | null;
+        min_g: number | null;
+        max_g: number | null;
+      }>(
+        `SELECT AVG(hydration) as h, AVG(exposure) as e, MIN(growth_index) as min_g, MAX(growth_index) as max_g
+         FROM metrics WHERE created_at >= ? AND ${sensorCondition}`,
+        params,
+      );
 
-        // Build the WHERE clause to handle either the specific sensor or legacy data (sensor_id IS NULL)
-        const sensorCondition = sensorDbId != null 
-          ? `(sensor_id = ? OR sensor_id IS NULL)` 
-          : `sensor_id IS NULL`;
-        const params = sensorDbId != null ? [cutoff, sensorDbId] : [cutoff];
-
-        const metricsSql = `
-           SELECT AVG(hydration) as h, AVG(exposure) as e, MIN(growth_index) as min_g, MAX(growth_index) as max_g
-           FROM metrics
-           WHERE created_at >= ? AND ${sensorCondition}
-         `;
-        const metricsRes = db.getFirstSync<any>(metricsSql, params);
-
-        if (metricsRes) {
-          const diff = ((metricsRes.max_g || 0) - (metricsRes.min_g || 0));
-
-          setStats((prev) => ({
-            // Keep live hydration/exposure if available, fall back to DB averages
-            hydration: liveMetrics?.hydration ?? Math.round(metricsRes.h || 88),
-            exposure: liveMetrics ? Number((liveMetrics.light / 300).toFixed(1)) : Number((metricsRes.e || 6.2).toFixed(1)),
-            growthDiff: Number(diff.toFixed(1)) || 1.2,
-          }));
-        }
-
-        const eventsSql = `
-           SELECT * FROM history
-           WHERE created_at >= ? AND ${sensorCondition}
-           ORDER BY created_at DESC
-         `;
-        const eventsRes = db.getAllSync<any>(eventsSql, params);
-        setEvents(eventsRes);
-
-        const chartSql = `
-           SELECT created_at, growth_index 
-           FROM metrics 
-           WHERE created_at >= ? AND ${sensorCondition}
-           ORDER BY created_at ASC
-         `;
-        const chartRes = db.getAllSync<any>(chartSql, params);
-
-        setChartData(chartRes.length > 0 ? chartRes : [{ growth_index: 0 }, { growth_index: 1 }]);
-      } catch (error) {
-        console.warn('Explore DB Error:', error);
+      if (metricsRes) {
+        const diff = (metricsRes.max_g ?? 0) - (metricsRes.min_g ?? 0);
+        setStats((previous) => ({
+          hydration: liveMetrics?.hydration ?? Math.round(metricsRes.h || 88),
+          exposure: liveMetrics ? Number((liveMetrics.light / 300).toFixed(1)) : Number((metricsRes.e || 6.2).toFixed(1)),
+          growthDiff: Number(diff.toFixed(1)) || 1.2,
+          temperature: liveMetrics?.temp ?? previous.temperature,
+          humidity: liveMetrics?.humidity ?? previous.humidity,
+        }));
       }
-    };
 
-    fetchMetrics();
+      const eventsRes = db.getAllSync<HistoryEvent>(
+        `SELECT * FROM history WHERE created_at >= ? AND ${sensorCondition} ORDER BY created_at DESC`,
+        params,
+      );
+      setEvents(eventsRes);
+
+      const chartRes = db.getAllSync<ChartPoint>(
+        `SELECT created_at, growth_index FROM metrics WHERE created_at >= ? AND ${sensorCondition} ORDER BY created_at ASC`,
+        params,
+      );
+      setChartData(chartRes.length > 0 ? chartRes : [{ growth_index: 0 }, { growth_index: 1 }]);
+    } catch (error) {
+      console.warn('Explore DB Error:', error);
+    }
   }, [selectedRange, liveMetrics, allSensors, activeSensorId]);
 
   const toggleRange = (range: 'Día' | 'Semana') => {
@@ -119,146 +129,98 @@ export default function ExploreScreen() {
     setSelectedRange(range);
   };
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <MaterialIcons name="eco" size={24} color="#2e7d32" />
-          <ThemedText style={styles.headerTitle}>Historial</ThemedText>
-        </View>
-        <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/settings')}>
-          <MaterialIcons name={connectionStatus === 'connected' ? 'bluetooth-connected' : 'bluetooth-disabled'} size={24} color={connectionStatus === 'connected' ? '#2e7d32' : '#707a6c'} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroSection}>
+  const renderWidget = (widget: WidgetItem) => {
+    if (widget.id === 'plant') {
+      return (
+        <View key={widget.id} style={styles.heroSection}>
           <View style={styles.heroText}>
-            <ThemedText style={styles.heroSubtitle}>ACTIVE SPECIMEN</ThemedText>
-            <ThemedText style={styles.heroTitle}>Monstera Deliciosa</ThemedText>
+            <ThemedText style={styles.heroSubtitle}>{widget.title}</ThemedText>
+            <ThemedText style={styles.heroTitle}>{preferences.plantName}</ThemedText>
+            {preferences.plantSpecies.length > 0 && (
+              <ThemedText style={styles.heroSpecies}>{preferences.plantSpecies}</ThemedText>
+            )}
           </View>
           <View style={styles.heroImageContainer}>
-            <Image
-              source={require('../../assets/images/unnamed1.png')}
-              style={styles.heroImage}
-              contentFit="cover"
-            />
+            <Image source={getPlantImageSource(preferences.plantImage)} style={styles.heroImage} contentFit="cover" />
           </View>
         </View>
+      );
+    }
 
-        <View style={styles.chartModule}>
+    if (widget.id === 'growthChart') {
+      const values = chartData.map((point) => point.growth_index ?? 0);
+      const maxValue = Math.max(...values, 0.1);
+      const minValue = Math.min(...values);
+      const valueRange = maxValue - minValue || 1;
+
+      return (
+        <View key={widget.id} style={styles.chartModule}>
           <View style={styles.chartHeader}>
             <View>
-              <ThemedText style={styles.chartTitle}>Growth Index</ThemedText>
+              <ThemedText style={styles.chartTitle}>{widget.title}</ThemedText>
               <ThemedText style={styles.chartSubtitle}>Últimos {selectedRange === 'Día' ? '7 días' : '30 días'}</ThemedText>
             </View>
             <View style={styles.segmentedControl}>
-              <TouchableOpacity
-                style={selectedRange === 'Día' ? styles.segmentBtnActive : styles.segmentBtnInactive}
-                onPress={() => toggleRange('Día')}
-              >
-                <ThemedText style={selectedRange === 'Día' ? styles.segmentTextActive : styles.segmentTextInactive}>Día</ThemedText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={selectedRange === 'Semana' ? styles.segmentBtnActive : styles.segmentBtnInactive}
-                onPress={() => toggleRange('Semana')}
-              >
-                <ThemedText style={selectedRange === 'Semana' ? styles.segmentTextActive : styles.segmentTextInactive}>Semana</ThemedText>
-              </TouchableOpacity>
+              {(['Día', 'Semana'] as const).map((range) => (
+                <TouchableOpacity
+                  key={range}
+                  style={selectedRange === range ? styles.segmentBtnActive : styles.segmentBtnInactive}
+                  onPress={() => toggleRange(range)}
+                >
+                  <ThemedText style={selectedRange === range ? styles.segmentTextActive : styles.segmentTextInactive}>
+                    {range}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
-          <View style={styles.chartStats}>
-            <ThemedText style={styles.chartValue}>+{stats.growthDiff}%</ThemedText>
-            <ThemedText style={styles.chartStatus}>{selectedRange === 'Semana' ? 'STRONG GROWTH' : 'STABLE VITALITY'}</ThemedText>
-          </View>
-
-          {/* Dynamic Data-Driven Chart Box */}
           <View style={styles.chartArea}>
             <LinearGradient
               colors={['rgba(46, 125, 50, 0.12)', 'rgba(46, 125, 50, 0)']}
-              style={styles.chartGradientMock}
+              style={styles.chartGradient}
             />
-
             {selectedRange === 'Día' ? (
-              /* Bar Chart (Día = 7 Días) */
               <View style={styles.chartBarsContainer}>
-                {chartData.map((d, i) => {
-                  const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
-                  const heightPct = Math.max(10, ((d.growth_index || 0) / maxVal) * 100);
+                {chartData.map((point, index) => {
+                  const heightPct = Math.max(10, ((point.growth_index ?? 0) / maxValue) * 100);
                   return (
-                    <View key={"bar-" + i} style={styles.chartBarWrapper}>
-                      <View style={[styles.chartBar, { height: `${heightPct}%` as any }]} />
+                    <View key={`bar-${index}`} style={styles.chartBarWrapper}>
+                      <View style={[styles.chartBar, { height: `${heightPct}%` }]} />
                     </View>
                   );
                 })}
               </View>
             ) : (
-              /* Line Chart Native (Semana = Último Mes) */
               <View style={styles.chartLineContainer}>
-                {chartData.length > 1 && chartData.map((d, i) => {
-                  if (i === chartData.length - 1) return null;
-                  const next = chartData[i + 1];
-
-                  const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
-                  const minVal = Math.min(...chartData.map(c => c.growth_index || 0));
-                  const range = (maxVal - minVal) || 1;
-
-                  const px = (i / (chartData.length - 1)) * CHART_WIDTH;
-                  const py = CHART_HEIGHT - (((d.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
-
-                  const nx = ((i + 1) / (chartData.length - 1)) * CHART_WIDTH;
-                  const ny = CHART_HEIGHT - (((next.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
-
-                  const length = Math.hypot(nx - px, ny - py);
-                  const angle = Math.atan2(ny - py, nx - px) * (180 / Math.PI);
+                {chartData.slice(0, -1).map((point, index) => {
+                  const next = chartData[index + 1];
+                  const x = (index / (chartData.length - 1)) * CHART_WIDTH;
+                  const y = CHART_HEIGHT - (((point.growth_index ?? 0) - minValue) / valueRange) * (CHART_HEIGHT * 0.8) - 10;
+                  const nextX = ((index + 1) / (chartData.length - 1)) * CHART_WIDTH;
+                  const nextY = CHART_HEIGHT - (((next.growth_index ?? 0) - minValue) / valueRange) * (CHART_HEIGHT * 0.8) - 10;
+                  const length = Math.hypot(nextX - x, nextY - y);
+                  const angle = Math.atan2(nextY - y, nextX - x) * (180 / Math.PI);
 
                   return (
-                    <View key={`line-${i}`} style={{
-                      position: 'absolute',
-                      left: px,
-                      top: py - 2.5,
-                      width: length,
-                      height: 5,
-                      backgroundColor: '#206223',
-                      // native anchor fallback approach to rotate correctly between two points from top-left origin
-                      transform: [
-                        { translateX: length / 2 - length / 2 },
-                        { rotate: angle + 'deg' },
-                      ],
-                      transformOrigin: 'left',
-                      borderRadius: 3,
-                      zIndex: 2,
-                    }} />
-                  );
-                })}
-
-                {/* Decorative Dots */}
-                {chartData.map((d, i) => {
-                  if (i % 3 !== 0 && i !== chartData.length - 1) return null; // Show dots selectively
-                  const maxVal = Math.max(...chartData.map(c => c.growth_index || 0), 0.1);
-                  const minVal = Math.min(...chartData.map(c => c.growth_index || 0));
-                  const range = (maxVal - minVal) || 1;
-                  const px = (i / (chartData.length - 1)) * CHART_WIDTH;
-                  const py = CHART_HEIGHT - (((d.growth_index || 0) - minVal) / range) * (CHART_HEIGHT * 0.8) - 10;
-
-                  return (
-                    <View key={`dot-${i}`} style={{
-                      position: 'absolute',
-                      left: px - 5,
-                      top: py - 5,
-                      width: 10, height: 10,
-                      borderRadius: 5,
-                      backgroundColor: '#e3ebdc',
-                      borderWidth: 2.5,
-                      borderColor: '#206223',
-                      zIndex: 3,
-                    }} />
+                    <View
+                      key={`line-${index}`}
+                      style={{
+                        position: 'absolute',
+                        left: x,
+                        top: y - 2.5,
+                        width: length,
+                        height: 5,
+                        backgroundColor: '#206223',
+                        transform: [{ rotate: `${angle}deg` }],
+                        transformOrigin: 'left',
+                        borderRadius: 3,
+                      }}
+                    />
                   );
                 })}
               </View>
             )}
-
             <View style={styles.chartLabels}>
               {selectedRange === 'Día' ? (
                 <>
@@ -277,58 +239,101 @@ export default function ExploreScreen() {
             </View>
           </View>
         </View>
+      );
+    }
 
-        <View style={styles.bentoGrid}>
-          <View style={styles.bentoCard}>
-            <MaterialIcons name="water-drop" size={24} color="#325c5a" style={styles.bentoIcon} />
-            <View>
+    if (widget.id === 'growthIndex') {
+      return (
+        <View key={widget.id} style={styles.growthIndexCard}>
+          <ThemedText style={styles.sectionTitle}>{widget.title}</ThemedText>
+          <ThemedText style={styles.growthValue}>+{stats.growthDiff}%</ThemedText>
+          <ThemedText style={styles.growthStatus}>
+            {selectedRange === 'Semana' ? 'STRONG GROWTH' : 'STABLE VITALITY'}
+          </ThemedText>
+        </View>
+      );
+    }
+
+    if (widget.id === 'summary') {
+      return (
+        <View key={widget.id} style={styles.summarySection}>
+          <ThemedText style={styles.sectionTitle}>{widget.title}</ThemedText>
+          <View style={styles.bentoGrid}>
+            <View style={styles.bentoCard}>
+              <MaterialIcons name="water-drop" size={24} color="#325c5a" style={styles.bentoIcon} />
               <ThemedText style={styles.bentoLabel}>HYDRATION</ThemedText>
-              <ThemedText style={styles.bentoValue}>{stats.hydration}% <ThemedText style={styles.bentoUnit}>Avg</ThemedText></ThemedText>
+              <ThemedText style={styles.bentoValue}>
+                {stats.hydration}% <ThemedText style={styles.bentoUnit}>Avg</ThemedText>
+              </ThemedText>
             </View>
-          </View>
-
-          <View style={styles.bentoCard}>
-            <MaterialIcons name="wb-sunny" size={24} color="#286b33" style={styles.bentoIcon} />
-            <View>
+            <View style={styles.bentoCard}>
+              <MaterialIcons name="wb-sunny" size={24} color="#286b33" style={styles.bentoIcon} />
               <ThemedText style={styles.bentoLabel}>EXPOSURE</ThemedText>
-              <ThemedText style={styles.bentoValue}>{stats.exposure} <ThemedText style={styles.bentoUnit}>hrs</ThemedText></ThemedText>
+              <ThemedText style={styles.bentoValue}>
+                {stats.exposure} <ThemedText style={styles.bentoUnit}>hrs</ThemedText>
+              </ThemedText>
             </View>
           </View>
         </View>
+      );
+    }
 
-        <View style={styles.timelineSection}>
-          <View style={styles.timelineHeader}>
-            <ThemedText style={styles.timelineTitle}>Resumen</ThemedText>
-            <TouchableOpacity>
-              <ThemedText style={styles.timelineAction}>{events.length} Eventos</ThemedText>
-            </TouchableOpacity>
+    if (widget.id === 'careTip') {
+      return (
+        <View key={widget.id} style={styles.extraCard}>
+          <MaterialIcons name="lightbulb" size={24} color="#206223" />
+          <View style={styles.extraCardText}>
+            <ThemedText style={styles.sectionTitle}>{widget.title}</ThemedText>
+            <ThemedText style={styles.extraDescription}>
+              {stats.hydration < 40
+                ? 'La hidratación está baja; revisa la humedad del sustrato.'
+                : 'La planta mantiene una hidratación adecuada. Continúa con el seguimiento.'}
+            </ThemedText>
           </View>
+        </View>
+      );
+    }
 
+    if (widget.id === 'environment') {
+      return (
+        <View key={widget.id} style={styles.extraCard}>
+          <MaterialIcons name="air" size={24} color="#206223" />
+          <View style={styles.extraCardText}>
+            <ThemedText style={styles.sectionTitle}>{widget.title}</ThemedText>
+            <ThemedText style={styles.extraDescription}>
+              Temperatura {stats.temperature}°C · Humedad {stats.humidity}% · Luz {stats.exposure} hrs
+            </ThemedText>
+          </View>
+        </View>
+      );
+    }
+
+    if (widget.id === 'events') {
+      return (
+        <View key={widget.id} style={styles.timelineSection}>
+          <View style={styles.timelineHeader}>
+            <ThemedText style={styles.timelineTitle}>{widget.title}</ThemedText>
+            <ThemedText style={styles.timelineAction}>{events.length} Eventos</ThemedText>
+          </View>
           <View style={styles.timelineList}>
             {events.length > 0 && <View style={styles.timelineTrack} />}
-
             {events.length === 0 && (
-              <ThemedText style={{ color: '#707a6c', textAlign: 'center', marginTop: 24 }}>
-                No se registraron eventos en este periodo.
-              </ThemedText>
+              <ThemedText style={styles.emptyEvents}>No se registraron eventos en este periodo.</ThemedText>
             )}
-
-            {events.map((evt, index) => {
+            {events.map((event, index) => {
               const isRecent = index === 0;
               return (
-                <View key={evt.id || index} style={styles.timelineNode}>
+                <View key={event.id} style={styles.timelineNode}>
                   <View style={[styles.timelineDot, isRecent && styles.timelineDotActive]} />
                   <View style={[styles.timelineCard, { backgroundColor: isRecent ? '#eff6e7' : 'rgba(239, 246, 231, 0.6)' }]}>
                     <View style={styles.timelineCardHeader}>
-                      <ThemedText style={[styles.timelineCardTitle, !isRecent && { opacity: 0.7 }]}>
-                        {evt.action}
+                      <ThemedText style={[styles.timelineCardTitle, !isRecent && styles.inactiveEvent]}>
+                        {event.action}
                       </ThemedText>
-                      <ThemedText style={styles.timelineCardDate}>
-                        {formatDate(evt.created_at)}
-                      </ThemedText>
+                      <ThemedText style={styles.timelineCardDate}>{formatDate(event.created_at)}</ThemedText>
                     </View>
-                    <ThemedText style={[styles.timelineCardDesc, !isRecent && { opacity: 0.7 }]}>
-                      {evt.details}
+                    <ThemedText style={[styles.timelineCardDesc, !isRecent && styles.inactiveEvent]}>
+                      {event.details}
                     </ThemedText>
                   </View>
                 </View>
@@ -336,7 +341,31 @@ export default function ExploreScreen() {
             })}
           </View>
         </View>
+      );
+    }
 
+    return null;
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <MaterialIcons name="eco" size={24} color="#2e7d32" />
+          <ThemedText style={styles.headerTitle}>Historial</ThemedText>
+        </View>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/widget-settings')} accessibilityLabel="Personalizar historial">
+            <MaterialIcons name="tune" size={22} color="#2e7d32" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/settings')} accessibilityLabel="Conectar sensores">
+            <MaterialIcons name={connectionStatus === 'connected' ? 'bluetooth-connected' : 'bluetooth-disabled'} size={24} color={connectionStatus === 'connected' ? '#2e7d32' : '#707a6c'} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {preferences.historyWidgets.filter((widget) => widget.enabled).map(renderWidget)}
       </ScrollView>
     </SafeAreaView>
   );
@@ -359,6 +388,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   headerTitle: {
     fontFamily: 'Manrope_800ExtraBold',
     fontSize: 24,
@@ -376,12 +409,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 160,
+    gap: 24,
   },
   heroSection: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 32,
   },
   heroText: {
     flex: 1,
@@ -401,9 +434,14 @@ const styles = StyleSheet.create({
     color: '#206223',
     letterSpacing: -1,
   },
+  heroSpecies: {
+    color: '#707a6c',
+    fontSize: 14,
+    marginTop: 3,
+  },
   heroImageContainer: {
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     borderRadius: 20,
     backgroundColor: '#e9f0e1',
     overflow: 'hidden',
@@ -416,7 +454,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6e7',
     borderRadius: 32,
     padding: 24,
-    marginBottom: 24,
     overflow: 'hidden',
   },
   chartHeader: {
@@ -441,7 +478,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   segmentBtnInactive: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
   },
@@ -452,13 +489,9 @@ const styles = StyleSheet.create({
   },
   segmentBtnActive: {
     backgroundColor: '#206223',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
     elevation: 2,
   },
   segmentTextActive: {
@@ -466,30 +499,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ffffff',
   },
-  chartStats: {
-    marginBottom: 16,
-  },
-  chartValue: {
-    fontSize: 32,
-    fontFamily: 'Manrope_800ExtraBold',
-    color: '#206223',
-  },
-  chartStatus: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    color: '#286b33',
-    marginTop: 4,
-  },
   chartArea: {
     height: 140,
     width: '100%',
     justifyContent: 'flex-end',
     position: 'relative',
-    marginTop: 16,
+    marginTop: 8,
   },
-  chartGradientMock: {
+  chartGradient: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 16,
   },
@@ -502,13 +519,13 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     position: 'absolute',
     bottom: 0,
-    zIndex: 10,
   },
   chartBarWrapper: {
-    height: '100%' as any,
+    flex: 1,
+    height: '100%',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    marginHorizontal: 4,
+    marginHorizontal: 3,
   },
   chartBar: {
     width: 14,
@@ -523,34 +540,55 @@ const styles = StyleSheet.create({
     left: 0,
     width: '100%',
     height: 100,
-    zIndex: 10,
   },
   chartLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 0,
     paddingBottom: 8,
   },
   chartLabelText: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#bfcaba',
+    color: '#899584',
+  },
+  growthIndexCard: {
+    backgroundColor: '#eff6e7',
+    padding: 22,
+    borderRadius: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontFamily: 'Manrope_800ExtraBold',
+    color: '#171d14',
+  },
+  growthValue: {
+    fontSize: 32,
+    fontFamily: 'Manrope_800ExtraBold',
+    color: '#206223',
+    marginTop: 10,
+  },
+  growthStatus: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    color: '#286b33',
+    marginTop: 4,
+  },
+  summarySection: {
+    gap: 14,
   },
   bentoGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 32,
+    gap: 12,
   },
   bentoCard: {
-    width: '47.5%',
+    flex: 1,
     backgroundColor: '#ffffff',
-    padding: 20,
+    padding: 18,
     borderRadius: 24,
-    shadowColor: '#171d14',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.04,
-    shadowRadius: 24,
-    elevation: 4,
+    minHeight: 140,
   },
   bentoIcon: {
     marginBottom: 12,
@@ -564,7 +602,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   bentoValue: {
-    fontSize: 24,
+    fontSize: 23,
     fontFamily: 'Manrope_800ExtraBold',
     color: '#171d14',
   },
@@ -572,6 +610,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'normal',
     color: '#707a6c',
+  },
+  extraCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    padding: 20,
+    borderRadius: 24,
+    backgroundColor: '#eff6e7',
+  },
+  extraCardText: {
+    flex: 1,
+    gap: 6,
+  },
+  extraDescription: {
+    color: '#40493d',
+    fontSize: 13,
+    lineHeight: 19,
   },
   timelineSection: {
   },
@@ -631,9 +686,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     marginBottom: 8,
   },
   timelineCardTitle: {
+    flex: 1,
     fontSize: 14,
     fontWeight: 'bold',
     color: '#171d14',
@@ -647,5 +704,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#40493d',
     lineHeight: 18,
+  },
+  inactiveEvent: {
+    opacity: 0.7,
+  },
+  emptyEvents: {
+    color: '#707a6c',
+    textAlign: 'center',
+    marginTop: 12,
   },
 });

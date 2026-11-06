@@ -428,7 +428,7 @@ export function useSensorData(): UseSensorDataResult {
         metrics: fallback,
       });
     });
-    // If no sensors exist at all, nothing to update — Dashboard will use PlantHealthCard's internal fallback
+    // If no sensors exist, dashboard metric cards continue to use their demo values.
     setSensors(new Map(connectionsRef.current));
   }, [updateSensor]);
 
