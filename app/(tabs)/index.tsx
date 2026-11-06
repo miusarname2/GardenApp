@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
+import { EditableWidget, WidgetBounds } from '@/components/EditableWidget';
 import { PlantHealthCard } from '@/components/PlantHealthCard';
 import { DashboardMetricCard } from '@/components/DashboardMetricCard';
 import { EcoColors } from '@/constants/theme';
@@ -22,9 +23,71 @@ interface HistoryEntry {
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { metrics, connectionStatus, allSensors, activeSensorId } = useSensorContext();
-  const { preferences } = useWidgetPreferences();
+  const { preferences, savePreferences } = useWidgetPreferences();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [growthIndex, setGrowthIndex] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSavingWidgets, setIsSavingWidgets] = useState(false);
+  const [positionVersion, setPositionVersion] = useState(0);
+  const [draftWidgets, setDraftWidgets] = useState(preferences.dashboardWidgets);
+  const widgetBounds = useRef<Record<string, WidgetBounds>>({});
+  const lastDropTarget = useRef<string | null>(null);
+
+  const beginEditing = () => {
+    setDraftWidgets(preferences.dashboardWidgets);
+    setIsEditing(true);
+  };
+
+  const saveWidgetLayout = async () => {
+    setIsSavingWidgets(true);
+    try {
+      await savePreferences({ ...preferences, dashboardWidgets: draftWidgets });
+      setIsEditing(false);
+    } catch (error) {
+      console.warn('[Dashboard] Failed to save widget layout:', error);
+      Alert.alert('No se guardó el diseño', 'Revisa el almacenamiento del dispositivo e inténtalo de nuevo.');
+    } finally {
+      setIsSavingWidgets(false);
+    }
+  };
+
+  const handleWidgetDrag = (id: string, x: number, y: number) => {
+    const enabledIds = new Set(draftWidgets.filter((widget) => widget.enabled).map((widget) => widget.id));
+    const target = Object.entries(widgetBounds.current).find(([targetId, bounds]) =>
+      targetId !== id &&
+      enabledIds.has(targetId) &&
+      x >= bounds.x &&
+      x <= bounds.x + bounds.width &&
+      y >= bounds.y &&
+      y <= bounds.y + bounds.height,
+    );
+    if (!target || lastDropTarget.current === target[0]) return;
+
+    lastDropTarget.current = target[0];
+    setDraftWidgets((current) => {
+      const sourceIndex = current.findIndex((widget) => widget.id === id);
+      const targetIndex = current.findIndex((widget) => widget.id === target[0]);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+      const next = [...current];
+      [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
+      return next;
+    });
+  };
+
+  const updateWidget = (id: string, updates: Partial<WidgetItem>) => {
+    setDraftWidgets((current) => current.map((widget) => (
+      widget.id === id ? { ...widget, ...updates } : widget
+    )));
+  };
+
+  const addWidget = (id: string) => {
+    const count = draftWidgets.filter((widget) => widget.enabled).length;
+    if (count >= 8) {
+      Alert.alert('Límite alcanzado', 'El Dashboard permite un máximo de 8 widgets.');
+      return;
+    }
+    updateWidget(id, { enabled: true });
+  };
 
   useEffect(() => {
     try {
@@ -127,16 +190,14 @@ export default function DashboardScreen() {
     };
 
     let content: React.ReactNode;
-    let fullWidth = false;
-
     if (widget.id === 'plant') {
-      fullWidth = true;
       content = (
         <PlantHealthCard
           plantName={preferences.plantName}
           plantSpecies={preferences.plantSpecies}
           plantImage={preferences.plantImage}
           widgetTitle={widget.title}
+          compact={widget.size === 'small'}
         />
       );
     } else if (metricCards[widget.id]) {
@@ -164,9 +225,8 @@ export default function DashboardScreen() {
         />
       );
     } else if (widget.id === 'careTip') {
-      fullWidth = true;
       content = (
-        <View style={styles.tipCard}>
+        <View style={[styles.tipCard, widget.size === 'small' && styles.compactTipCard]}>
           <MaterialIcons name="lightbulb" size={24} color={EcoColors.primary} />
           <View style={styles.tipContent}>
             <ThemedText style={styles.tipTitle}>{widget.title}</ThemedText>
@@ -179,10 +239,9 @@ export default function DashboardScreen() {
         </View>
       );
     } else if (widget.id === 'recentGrowth') {
-      fullWidth = true;
       content = (
-        <View style={styles.timelineSection}>
-          <ThemedText style={styles.timelineTitle}>{widget.title}</ThemedText>
+        <View style={[styles.timelineSection, widget.size === 'small' && styles.compactTimelineSection]}>
+          <ThemedText style={[styles.timelineTitle, widget.size === 'small' && styles.compactTimelineTitle]}>{widget.title}</ThemedText>
           {history.length === 0 ? (
             <ThemedText style={styles.emptyHistory}>Aún no hay eventos registrados.</ThemedText>
           ) : (
@@ -206,9 +265,20 @@ export default function DashboardScreen() {
     }
 
     return (
-      <View key={widget.id} style={[styles.widget, fullWidth && styles.fullWidth]}>
+      <EditableWidget
+        key={widget.id}
+        widget={widget}
+        editing={isEditing}
+        positionVersion={positionVersion}
+        style={[styles.widget, widget.size === 'large' ? styles.fullWidth : styles.halfWidth]}
+        onPosition={(id, bounds) => { widgetBounds.current[id] = bounds; }}
+        onDrag={handleWidgetDrag}
+        onDragEnd={() => { lastDropTarget.current = null; }}
+        onToggleSize={() => updateWidget(widget.id, { size: widget.size === 'large' ? 'small' : 'large' })}
+        onRemove={() => updateWidget(widget.id, { enabled: false })}
+      >
         {content}
-      </View>
+      </EditableWidget>
     );
   };
 
@@ -221,8 +291,13 @@ export default function DashboardScreen() {
             <ThemedText style={styles.headerTitle}>Digital Garden</ThemedText>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/widget-settings')} accessibilityLabel="Personalizar widgets">
-              <MaterialIcons name="tune" size={22} color={EcoColors.primary} />
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => isEditing ? void saveWidgetLayout() : beginEditing()}
+              disabled={isSavingWidgets}
+              accessibilityLabel={isEditing ? 'Guardar diseño del Dashboard' : 'Editar widgets del Dashboard'}
+            >
+              <MaterialIcons name={isEditing ? 'check' : 'edit'} size={22} color={EcoColors.primary} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/settings')} accessibilityLabel="Conectar sensores">
               <MaterialIcons name={connectionStatus === 'connected' ? 'bluetooth-connected' : 'bluetooth-disabled'} size={22} color={connectionStatus === 'connected' ? EcoColors.primary : EcoColors.outline} />
@@ -231,10 +306,37 @@ export default function DashboardScreen() {
         </View>
       </SafeAreaView>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={100}
+        onScroll={() => {
+          if (isEditing) setPositionVersion((version) => version + 1);
+        }}
+      >
+        {isEditing && (
+          <View style={styles.editingHint}>
+            <ThemedText style={styles.editingHintText}>Arrastra desde el icono para ordenar; usa los controles para ajustar el tamaño u ocultar widgets.</ThemedText>
+          </View>
+        )}
         <View style={styles.widgetsContainer}>
-          {preferences.dashboardWidgets.filter((widget) => widget.enabled).map(renderWidget)}
+          {(isEditing ? draftWidgets : preferences.dashboardWidgets)
+            .filter((widget) => widget.enabled)
+            .map(renderWidget)}
         </View>
+        {isEditing && (
+          <View style={styles.availableWidgets}>
+            <ThemedText style={styles.availableWidgetsTitle}>Añadir widgets ({draftWidgets.filter((widget) => widget.enabled).length}/8)</ThemedText>
+            <View style={styles.availableWidgetsList}>
+              {draftWidgets.filter((widget) => !widget.enabled).map((widget) => (
+                <TouchableOpacity key={widget.id} style={styles.availableWidget} onPress={() => addWidget(widget.id)}>
+                  <MaterialIcons name="add" size={16} color={EcoColors.primary} />
+                  <ThemedText style={styles.availableWidgetText}>{widget.title}</ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       <TouchableOpacity
@@ -305,12 +407,52 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  widget: {
+  halfWidth: {
     width: '48%',
+  },
+  widget: {
     marginBottom: 8,
   },
   fullWidth: {
     width: '100%',
+  },
+  editingHint: {
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#e7f1df',
+  },
+  editingHintText: {
+    color: '#40523b',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  availableWidgets: {
+    marginTop: 16,
+    gap: 10,
+  },
+  availableWidgetsTitle: {
+    color: '#206223',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  availableWidgetsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  availableWidget: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#e7f1df',
+  },
+  availableWidgetText: {
+    color: '#206223',
+    fontSize: 12,
   },
   tipCard: {
     minHeight: 110,
@@ -320,6 +462,11 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 24,
     backgroundColor: '#eff6e7',
+  },
+  compactTipCard: {
+    minHeight: 110,
+    padding: 12,
+    gap: 8,
   },
   tipContent: {
     flex: 1,
@@ -339,11 +486,19 @@ const styles = StyleSheet.create({
     marginTop: 24,
     paddingHorizontal: 8,
   },
+  compactTimelineSection: {
+    marginTop: 8,
+    paddingHorizontal: 2,
+  },
   timelineTitle: {
     fontFamily: 'Manrope_700Bold',
     fontSize: 20,
     color: '#171d14',
     marginBottom: 24,
+  },
+  compactTimelineTitle: {
+    fontSize: 16,
+    marginBottom: 12,
   },
   timelineWrapper: {
     paddingLeft: 24,

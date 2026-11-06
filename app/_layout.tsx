@@ -79,7 +79,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="bluetooth-onboarding" options={{ headerShown: false }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            <Stack.Screen name="widget-settings" options={{ presentation: 'modal', title: 'Personalizar' }} />
+            <Stack.Screen name="plant-settings" options={{ presentation: 'modal', title: 'Tu planta' }} />
           </Stack>
           <StatusBar style="auto" />
         </SensorDataProvider>

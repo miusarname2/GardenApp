@@ -67,10 +67,11 @@ GardenApp/
 │   │   ├── index.tsx      # Dashboard principal
 │   │   ├── explore.tsx    # Historial y gráficos
 │   │   └── settings.tsx   # Configuración y escaneo BLE
-│   ├── widget-settings.tsx # Personalización de planta y widgets
+│   ├── plant-settings.tsx # Configuración de la planta
 │   ├── bluetooth-onboarding.tsx  # Tutorial de conexión
 │   └── _layout.tsx        # Layout raíz
 ├── components/            # Componentes reutilizables
+│   ├── EditableWidget.tsx # Edición de orden y tamaño de widgets
 │   └── PlantHealthCard.tsx # Perfil visual de la planta
 ├── constants/             # Configuraciones y temas
 ├── db/                    # Base de datos SQLite

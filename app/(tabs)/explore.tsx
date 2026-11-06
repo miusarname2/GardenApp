@@ -2,8 +2,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Dimensions,
   LayoutAnimation,
   Platform,
@@ -14,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { EditableWidget, WidgetBounds } from '@/components/EditableWidget';
 import { ThemedText } from '@/components/themed-text';
 import { getPlantImageSource } from '@/constants/plant-images';
 import { getDb } from '@/db';
@@ -21,7 +23,6 @@ import { useSensorContext } from '@/contexts/sensor-context';
 import { useWidgetPreferences, WidgetItem } from '@/contexts/widget-preferences-context';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const CHART_WIDTH = SCREEN_WIDTH - 96;
 const CHART_HEIGHT = 100;
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -58,10 +59,73 @@ const formatDate = (isoString: string) => {
 export default function ExploreScreen() {
   const [selectedRange, setSelectedRange] = useState<'Día' | 'Semana'>('Día');
   const { metrics: liveMetrics, connectionStatus, allSensors, activeSensorId } = useSensorContext();
-  const { preferences } = useWidgetPreferences();
+  const { preferences, savePreferences } = useWidgetPreferences();
   const [stats, setStats] = useState({ hydration: 88, exposure: 6.2, growthDiff: 12.4, temperature: 24, humidity: 52 });
   const [events, setEvents] = useState<HistoryEvent[]>([]);
   const [chartData, setChartData] = useState<ChartPoint[]>([]);
+  const [chartWidth, setChartWidth] = useState(Math.max(SCREEN_WIDTH - 96, 1));
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSavingWidgets, setIsSavingWidgets] = useState(false);
+  const [positionVersion, setPositionVersion] = useState(0);
+  const [draftWidgets, setDraftWidgets] = useState(preferences.historyWidgets);
+  const widgetBounds = useRef<Record<string, WidgetBounds>>({});
+  const lastDropTarget = useRef<string | null>(null);
+
+  const beginEditing = () => {
+    setDraftWidgets(preferences.historyWidgets);
+    setIsEditing(true);
+  };
+
+  const saveWidgetLayout = async () => {
+    setIsSavingWidgets(true);
+    try {
+      await savePreferences({ ...preferences, historyWidgets: draftWidgets });
+      setIsEditing(false);
+    } catch (error) {
+      console.warn('[History] Failed to save widget layout:', error);
+      Alert.alert('No se guardó el diseño', 'Revisa el almacenamiento del dispositivo e inténtalo de nuevo.');
+    } finally {
+      setIsSavingWidgets(false);
+    }
+  };
+
+  const handleWidgetDrag = (id: string, x: number, y: number) => {
+    const enabledIds = new Set(draftWidgets.filter((widget) => widget.enabled).map((widget) => widget.id));
+    const target = Object.entries(widgetBounds.current).find(([targetId, bounds]) =>
+      targetId !== id &&
+      enabledIds.has(targetId) &&
+      x >= bounds.x &&
+      x <= bounds.x + bounds.width &&
+      y >= bounds.y &&
+      y <= bounds.y + bounds.height,
+    );
+    if (!target || lastDropTarget.current === target[0]) return;
+
+    lastDropTarget.current = target[0];
+    setDraftWidgets((current) => {
+      const sourceIndex = current.findIndex((widget) => widget.id === id);
+      const targetIndex = current.findIndex((widget) => widget.id === target[0]);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+      const next = [...current];
+      [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
+      return next;
+    });
+  };
+
+  const updateWidget = (id: string, updates: Partial<WidgetItem>) => {
+    setDraftWidgets((current) => current.map((widget) => (
+      widget.id === id ? { ...widget, ...updates } : widget
+    )));
+  };
+
+  const addWidget = (id: string) => {
+    const count = draftWidgets.filter((widget) => widget.enabled).length;
+    if (count >= 4) {
+      Alert.alert('Límite alcanzado', 'El Historial permite un máximo de 4 widgets.');
+      return;
+    }
+    updateWidget(id, { enabled: true });
+  };
 
   useEffect(() => {
     if (liveMetrics) {
@@ -132,15 +196,15 @@ export default function ExploreScreen() {
   const renderWidget = (widget: WidgetItem) => {
     if (widget.id === 'plant') {
       return (
-        <View key={widget.id} style={styles.heroSection}>
+        <View key={widget.id} style={[styles.heroSection, widget.size === 'small' && styles.compactHeroSection]}>
           <View style={styles.heroText}>
             <ThemedText style={styles.heroSubtitle}>{widget.title}</ThemedText>
-            <ThemedText style={styles.heroTitle}>{preferences.plantName}</ThemedText>
+            <ThemedText style={[styles.heroTitle, widget.size === 'small' && styles.compactHeroTitle]}>{preferences.plantName}</ThemedText>
             {preferences.plantSpecies.length > 0 && (
               <ThemedText style={styles.heroSpecies}>{preferences.plantSpecies}</ThemedText>
             )}
           </View>
-          <View style={styles.heroImageContainer}>
+          <View style={[styles.heroImageContainer, widget.size === 'small' && styles.compactHeroImageContainer]}>
             <Image source={getPlantImageSource(preferences.plantImage)} style={styles.heroImage} contentFit="cover" />
           </View>
         </View>
@@ -154,8 +218,8 @@ export default function ExploreScreen() {
       const valueRange = maxValue - minValue || 1;
 
       return (
-        <View key={widget.id} style={styles.chartModule}>
-          <View style={styles.chartHeader}>
+        <View key={widget.id} style={[styles.chartModule, widget.size === 'small' && styles.compactChartModule]}>
+          <View style={[styles.chartHeader, widget.size === 'small' && styles.compactChartHeader]}>
             <View>
               <ThemedText style={styles.chartTitle}>{widget.title}</ThemedText>
               <ThemedText style={styles.chartSubtitle}>Últimos {selectedRange === 'Día' ? '7 días' : '30 días'}</ThemedText>
@@ -175,7 +239,13 @@ export default function ExploreScreen() {
             </View>
           </View>
 
-          <View style={styles.chartArea}>
+          <View
+            style={styles.chartArea}
+            onLayout={(event) => {
+              const nextWidth = Math.max(event.nativeEvent.layout.width, 1);
+              setChartWidth((current) => Math.abs(current - nextWidth) > 1 ? nextWidth : current);
+            }}
+          >
             <LinearGradient
               colors={['rgba(46, 125, 50, 0.12)', 'rgba(46, 125, 50, 0)']}
               style={styles.chartGradient}
@@ -195,9 +265,9 @@ export default function ExploreScreen() {
               <View style={styles.chartLineContainer}>
                 {chartData.slice(0, -1).map((point, index) => {
                   const next = chartData[index + 1];
-                  const x = (index / (chartData.length - 1)) * CHART_WIDTH;
+                  const x = (index / (chartData.length - 1)) * chartWidth;
                   const y = CHART_HEIGHT - (((point.growth_index ?? 0) - minValue) / valueRange) * (CHART_HEIGHT * 0.8) - 10;
-                  const nextX = ((index + 1) / (chartData.length - 1)) * CHART_WIDTH;
+                  const nextX = ((index + 1) / (chartData.length - 1)) * chartWidth;
                   const nextY = CHART_HEIGHT - (((next.growth_index ?? 0) - minValue) / valueRange) * (CHART_HEIGHT * 0.8) - 10;
                   const length = Math.hypot(nextX - x, nextY - y);
                   const angle = Math.atan2(nextY - y, nextX - x) * (180 / Math.PI);
@@ -244,7 +314,7 @@ export default function ExploreScreen() {
 
     if (widget.id === 'growthIndex') {
       return (
-        <View key={widget.id} style={styles.growthIndexCard}>
+        <View key={widget.id} style={[styles.growthIndexCard, widget.size === 'small' && styles.compactGrowthIndexCard]}>
           <ThemedText style={styles.sectionTitle}>{widget.title}</ThemedText>
           <ThemedText style={styles.growthValue}>+{stats.growthDiff}%</ThemedText>
           <ThemedText style={styles.growthStatus}>
@@ -258,15 +328,15 @@ export default function ExploreScreen() {
       return (
         <View key={widget.id} style={styles.summarySection}>
           <ThemedText style={styles.sectionTitle}>{widget.title}</ThemedText>
-          <View style={styles.bentoGrid}>
-            <View style={styles.bentoCard}>
+          <View style={[styles.bentoGrid, widget.size === 'small' && styles.compactBentoGrid]}>
+            <View style={[styles.bentoCard, widget.size === 'small' && styles.compactBentoCard]}>
               <MaterialIcons name="water-drop" size={24} color="#325c5a" style={styles.bentoIcon} />
               <ThemedText style={styles.bentoLabel}>HYDRATION</ThemedText>
               <ThemedText style={styles.bentoValue}>
                 {stats.hydration}% <ThemedText style={styles.bentoUnit}>Avg</ThemedText>
               </ThemedText>
             </View>
-            <View style={styles.bentoCard}>
+            <View style={[styles.bentoCard, widget.size === 'small' && styles.compactBentoCard]}>
               <MaterialIcons name="wb-sunny" size={24} color="#286b33" style={styles.bentoIcon} />
               <ThemedText style={styles.bentoLabel}>EXPOSURE</ThemedText>
               <ThemedText style={styles.bentoValue}>
@@ -280,7 +350,7 @@ export default function ExploreScreen() {
 
     if (widget.id === 'careTip') {
       return (
-        <View key={widget.id} style={styles.extraCard}>
+        <View key={widget.id} style={[styles.extraCard, widget.size === 'small' && styles.compactExtraCard]}>
           <MaterialIcons name="lightbulb" size={24} color="#206223" />
           <View style={styles.extraCardText}>
             <ThemedText style={styles.sectionTitle}>{widget.title}</ThemedText>
@@ -296,7 +366,7 @@ export default function ExploreScreen() {
 
     if (widget.id === 'environment') {
       return (
-        <View key={widget.id} style={styles.extraCard}>
+        <View key={widget.id} style={[styles.extraCard, widget.size === 'small' && styles.compactExtraCard]}>
           <MaterialIcons name="air" size={24} color="#206223" />
           <View style={styles.extraCardText}>
             <ThemedText style={styles.sectionTitle}>{widget.title}</ThemedText>
@@ -355,8 +425,13 @@ export default function ExploreScreen() {
           <ThemedText style={styles.headerTitle}>Historial</ThemedText>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/widget-settings')} accessibilityLabel="Personalizar historial">
-            <MaterialIcons name="tune" size={22} color="#2e7d32" />
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => isEditing ? void saveWidgetLayout() : beginEditing()}
+            disabled={isSavingWidgets}
+            accessibilityLabel={isEditing ? 'Guardar diseño del Historial' : 'Editar widgets del Historial'}
+          >
+            <MaterialIcons name={isEditing ? 'check' : 'edit'} size={22} color="#2e7d32" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/settings')} accessibilityLabel="Conectar sensores">
             <MaterialIcons name={connectionStatus === 'connected' ? 'bluetooth-connected' : 'bluetooth-disabled'} size={24} color={connectionStatus === 'connected' ? '#2e7d32' : '#707a6c'} />
@@ -364,8 +439,52 @@ export default function ExploreScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {preferences.historyWidgets.filter((widget) => widget.enabled).map(renderWidget)}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={100}
+        onScroll={() => {
+          if (isEditing) setPositionVersion((version) => version + 1);
+        }}
+      >
+        {isEditing && (
+          <View style={styles.editingHint}>
+            <ThemedText style={styles.editingHintText}>Arrastra desde el icono para ordenar; usa los controles para ajustar el tamaño u ocultar widgets.</ThemedText>
+          </View>
+        )}
+        <View style={styles.widgetsContainer}>
+          {(isEditing ? draftWidgets : preferences.historyWidgets)
+            .filter((widget) => widget.enabled)
+            .map((widget) => (
+              <EditableWidget
+                key={widget.id}
+                widget={widget}
+                editing={isEditing}
+                positionVersion={positionVersion}
+                style={widget.size === 'large' ? styles.fullWidget : styles.compactWidget}
+                onPosition={(id, bounds) => { widgetBounds.current[id] = bounds; }}
+                onDrag={handleWidgetDrag}
+                onDragEnd={() => { lastDropTarget.current = null; }}
+                onToggleSize={() => updateWidget(widget.id, { size: widget.size === 'large' ? 'small' : 'large' })}
+                onRemove={() => updateWidget(widget.id, { enabled: false })}
+              >
+                {renderWidget(widget)}
+              </EditableWidget>
+            ))}
+        </View>
+        {isEditing && (
+          <View style={styles.availableWidgets}>
+            <ThemedText style={styles.availableWidgetsTitle}>Añadir widgets ({draftWidgets.filter((widget) => widget.enabled).length}/4)</ThemedText>
+            <View style={styles.availableWidgetsList}>
+              {draftWidgets.filter((widget) => !widget.enabled).map((widget) => (
+                <TouchableOpacity key={widget.id} style={styles.availableWidget} onPress={() => addWidget(widget.id)}>
+                  <MaterialIcons name="add" size={16} color="#206223" />
+                  <ThemedText style={styles.availableWidgetText}>{widget.title}</ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -409,12 +528,64 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 160,
-    gap: 24,
+  },
+  widgetsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 24,
+  },
+  fullWidget: {
+    width: '100%',
+  },
+  compactWidget: {
+    width: '48%',
+  },
+  editingHint: {
+    marginBottom: 20,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#e7f1df',
+  },
+  editingHintText: {
+    color: '#40523b',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  availableWidgets: {
+    marginTop: 20,
+    gap: 10,
+  },
+  availableWidgetsTitle: {
+    color: '#206223',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  availableWidgetsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  availableWidget: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#e7f1df',
+  },
+  availableWidgetText: {
+    color: '#206223',
+    fontSize: 12,
   },
   heroSection: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  compactHeroSection: {
+    gap: 8,
   },
   heroText: {
     flex: 1,
@@ -434,6 +605,9 @@ const styles = StyleSheet.create({
     color: '#206223',
     letterSpacing: -1,
   },
+  compactHeroTitle: {
+    fontSize: 20,
+  },
   heroSpecies: {
     color: '#707a6c',
     fontSize: 14,
@@ -446,6 +620,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#e9f0e1',
     overflow: 'hidden',
   },
+  compactHeroImageContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+  },
   heroImage: {
     width: '100%',
     height: '100%',
@@ -456,11 +635,19 @@ const styles = StyleSheet.create({
     padding: 24,
     overflow: 'hidden',
   },
+  compactChartModule: {
+    padding: 14,
+    borderRadius: 24,
+  },
   chartHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 20,
+  },
+  compactChartHeader: {
+    flexDirection: 'column',
+    gap: 10,
   },
   chartTitle: {
     fontSize: 18,
@@ -556,6 +743,9 @@ const styles = StyleSheet.create({
     padding: 22,
     borderRadius: 24,
   },
+  compactGrowthIndexCard: {
+    padding: 14,
+  },
   sectionTitle: {
     fontSize: 18,
     fontFamily: 'Manrope_800ExtraBold',
@@ -578,6 +768,10 @@ const styles = StyleSheet.create({
   summarySection: {
     gap: 14,
   },
+  compactBentoGrid: {
+    flexDirection: 'column',
+    gap: 8,
+  },
   bentoGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -589,6 +783,10 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 24,
     minHeight: 140,
+  },
+  compactBentoCard: {
+    padding: 14,
+    minHeight: 110,
   },
   bentoIcon: {
     marginBottom: 12,
@@ -618,6 +816,10 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 24,
     backgroundColor: '#eff6e7',
+  },
+  compactExtraCard: {
+    padding: 12,
+    gap: 8,
   },
   extraCardText: {
     flex: 1,

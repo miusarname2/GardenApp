@@ -13,6 +13,7 @@ interface PlantHealthCardProps {
   plantSpecies?: string;
   plantImage?: string;
   widgetTitle?: string;
+  compact?: boolean;
 }
 
 export const PlantHealthCard = ({
@@ -21,20 +22,21 @@ export const PlantHealthCard = ({
   plantSpecies = 'Ficus lyrata',
   plantImage = 'garden',
   widgetTitle = 'CURRENT PLANT',
+  compact = false,
 }: PlantHealthCardProps) => {
   return (
     <View style={style}>
-      <View style={styles.heroContainer}>
+      <View style={[styles.heroContainer, compact && styles.compactHeroContainer]}>
         <Image
           source={getPlantImageSource(plantImage)}
           style={styles.heroImage}
           contentFit="cover"
         />
 
-        <BlurView intensity={80} tint="light" style={styles.floatingBadge}>
+        <BlurView intensity={80} tint="light" style={[styles.floatingBadge, compact && styles.compactFloatingBadge]}>
           <View>
             <ThemedText type="labelSmall" style={styles.badgeLabel}>{widgetTitle}</ThemedText>
-            <ThemedText type="headlineMedium" style={styles.badgeTitle}>{plantName}</ThemedText>
+            <ThemedText type="headlineMedium" style={[styles.badgeTitle, compact && styles.compactBadgeTitle]}>{plantName}</ThemedText>
             {plantSpecies.length > 0 && (
               <ThemedText style={styles.badgeSpecies}>{plantSpecies}</ThemedText>
             )}
@@ -45,7 +47,7 @@ export const PlantHealthCard = ({
         </BlurView>
       </View>
 
-      <View style={styles.editorialHeader}>
+      <View style={[styles.editorialHeader, compact && styles.compactEditorialHeader]}>
         <ThemedText type="labelSmall" style={styles.sectionLabel}>REAL-TIME METRICS</ThemedText>
         <ThemedText type="headlineLarge" style={styles.sectionTitle}>Huerto Digital</ThemedText>
       </View>
@@ -67,6 +69,9 @@ const styles = StyleSheet.create({
     elevation: 8,
     marginTop: 8,
   },
+  compactHeroContainer: {
+    height: 240,
+  },
   heroImage: {
     width: '100%',
     height: '100%',
@@ -86,6 +91,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.4)',
     overflow: 'hidden',
   },
+  compactFloatingBadge: {
+    bottom: 12,
+    left: 12,
+    right: 12,
+    padding: 12,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
   badgeLabel: {
     fontSize: 11,
     fontWeight: 'bold',
@@ -97,6 +111,10 @@ const styles = StyleSheet.create({
   badgeTitle: {
     fontWeight: 'bold',
     color: '#171d14',
+  },
+  compactBadgeTitle: {
+    fontSize: 17,
+    lineHeight: 21,
   },
   badgeSpecies: {
     fontSize: 12,
@@ -121,6 +139,11 @@ const styles = StyleSheet.create({
     marginTop: 40,
     marginBottom: 24,
     paddingHorizontal: 8,
+  },
+  compactEditorialHeader: {
+    marginTop: 16,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   sectionLabel: {
     fontSize: 11,

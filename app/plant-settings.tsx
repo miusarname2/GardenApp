@@ -6,7 +6,6 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
-  Switch,
   TextInput,
   TouchableOpacity,
   View,
@@ -15,15 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { EcoColors } from '@/constants/theme';
 import { getPlantImageSource, PLANT_IMAGE_OPTIONS } from '@/constants/plant-images';
-import {
-  GardenPreferences,
-  useWidgetPreferences,
-  WidgetItem,
-} from '@/contexts/widget-preferences-context';
+import { GardenPreferences, useWidgetPreferences } from '@/contexts/widget-preferences-context';
 
-type WidgetListKey = 'dashboardWidgets' | 'historyWidgets';
-
-export default function WidgetSettingsScreen() {
+export default function PlantSettingsScreen() {
   const { preferences, isLoaded, loadError, savePreferences } = useWidgetPreferences();
   const [draft, setDraft] = useState<GardenPreferences>(preferences);
   const [isSaving, setIsSaving] = useState(false);
@@ -31,18 +24,6 @@ export default function WidgetSettingsScreen() {
   useEffect(() => {
     if (isLoaded) setDraft(preferences);
   }, [isLoaded, preferences]);
-
-  const updateWidgets = (key: WidgetListKey, widgets: WidgetItem[]) => {
-    setDraft((current) => ({ ...current, [key]: widgets }));
-  };
-
-  const moveWidget = (key: WidgetListKey, index: number, direction: -1 | 1) => {
-    const items = [...draft[key]];
-    const nextIndex = index + direction;
-    if (nextIndex < 0 || nextIndex >= items.length) return;
-    [items[index], items[nextIndex]] = [items[nextIndex], items[index]];
-    updateWidgets(key, items);
-  };
 
   const save = async () => {
     const isPreset = PLANT_IMAGE_OPTIONS.some((option) => option.id === draft.plantImage);
@@ -58,12 +39,14 @@ export default function WidgetSettingsScreen() {
     setIsSaving(true);
     try {
       await savePreferences({
-        ...draft,
+        ...preferences,
+        plantName: draft.plantName,
+        plantSpecies: draft.plantSpecies,
         plantImage: draft.plantImage || PLANT_IMAGE_OPTIONS[0].id,
       });
       router.back();
     } catch (error) {
-      console.warn('[WidgetSettings] Failed to save preferences:', error);
+      console.warn('[PlantSettings] Failed to save preferences:', error);
       Alert.alert('No se guardaron los cambios', 'Revisa el almacenamiento del dispositivo e inténtalo de nuevo.');
     } finally {
       setIsSaving(false);
@@ -84,7 +67,7 @@ export default function WidgetSettingsScreen() {
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()} accessibilityLabel="Cerrar">
           <MaterialIcons name="close" size={24} color={EcoColors.primary} />
         </TouchableOpacity>
-        <ThemedText style={styles.headerTitle}>Personalizar</ThemedText>
+        <ThemedText style={styles.headerTitle}>Tu planta</ThemedText>
         <TouchableOpacity
           style={[styles.saveButton, isSaving && styles.disabledButton]}
           onPress={() => void save()}
@@ -96,7 +79,6 @@ export default function WidgetSettingsScreen() {
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {loadError && <ThemedText style={styles.errorText}>{loadError}</ThemedText>}
-
         <View style={styles.section}>
           <ThemedText style={styles.sectionTitle}>Tu planta</ThemedText>
           <ThemedText style={styles.helperText}>El nombre, especie y foto se comparten entre Dashboard e Historial.</ThemedText>
@@ -144,88 +126,8 @@ export default function WidgetSettingsScreen() {
             <Image source={getPlantImageSource(draft.plantImage)} style={styles.imagePreview} contentFit="cover" />
           )}
         </View>
-
-        <WidgetEditorSection
-          title="Dashboard"
-          description="Activa, renombra y ordena cada tarjeta."
-          widgets={draft.dashboardWidgets}
-          onChange={(widgets) => updateWidgets('dashboardWidgets', widgets)}
-          onMove={(index, direction) => moveWidget('dashboardWidgets', index, direction)}
-        />
-        <WidgetEditorSection
-          title="Historial"
-          description="También puedes mover Growth Index debajo de otras secciones."
-          widgets={draft.historyWidgets}
-          onChange={(widgets) => updateWidgets('historyWidgets', widgets)}
-          onMove={(index, direction) => moveWidget('historyWidgets', index, direction)}
-        />
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function WidgetEditorSection({
-  title,
-  description,
-  widgets,
-  onChange,
-  onMove,
-}: {
-  title: string;
-  description: string;
-  widgets: WidgetItem[];
-  onChange: (widgets: WidgetItem[]) => void;
-  onMove: (index: number, direction: -1 | 1) => void;
-}) {
-  const updateWidget = (index: number, updates: Partial<WidgetItem>) => {
-    onChange(widgets.map((widget, widgetIndex) => (
-      widgetIndex === index ? { ...widget, ...updates } : widget
-    )));
-  };
-
-  return (
-    <View style={styles.section}>
-      <ThemedText style={styles.sectionTitle}>{title}</ThemedText>
-      <ThemedText style={styles.helperText}>{description}</ThemedText>
-      {widgets.map((widget, index) => (
-        <View key={widget.id} style={styles.widgetRow}>
-          <View style={styles.reorderButtons}>
-            <TouchableOpacity
-              onPress={() => onMove(index, -1)}
-              disabled={index === 0}
-              accessibilityLabel={`Subir ${widget.title}`}
-              style={styles.reorderButton}
-            >
-              <MaterialIcons name="keyboard-arrow-up" size={22} color={index === 0 ? '#bfcaba' : EcoColors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => onMove(index, 1)}
-              disabled={index === widgets.length - 1}
-              accessibilityLabel={`Bajar ${widget.title}`}
-              style={styles.reorderButton}
-            >
-              <MaterialIcons name="keyboard-arrow-down" size={22} color={index === widgets.length - 1 ? '#bfcaba' : EcoColors.primary} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.widgetDetails}>
-            <TextInput
-              value={widget.title}
-              onChangeText={(titleText) => updateWidget(index, { title: titleText })}
-              style={styles.widgetInput}
-              maxLength={36}
-              accessibilityLabel={`Nombre de ${widget.title}`}
-            />
-          </View>
-          <Switch
-            value={widget.enabled}
-            onValueChange={(enabled) => updateWidget(index, { enabled })}
-            trackColor={{ false: '#cbd8c2', true: '#8ebc8b' }}
-            thumbColor={widget.enabled ? EcoColors.primary : '#f4f3f4'}
-            accessibilityLabel={`Mostrar ${widget.title}`}
-          />
-        </View>
-      ))}
-    </View>
   );
 }
 
@@ -270,7 +172,6 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 48,
-    gap: 20,
   },
   section: {
     padding: 18,
@@ -337,31 +238,6 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 18,
     marginTop: 4,
-  },
-  widgetRow: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#dce6d5',
-    gap: 8,
-  },
-  reorderButtons: {
-    alignItems: 'center',
-  },
-  reorderButton: {
-    width: 26,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  widgetDetails: {
-    flex: 1,
-  },
-  widgetInput: {
-    paddingVertical: 4,
-    color: '#171d14',
-    fontWeight: '600',
   },
   loadingText: {
     margin: 24,

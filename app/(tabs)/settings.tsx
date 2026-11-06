@@ -212,6 +212,17 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        <TouchableOpacity style={styles.plantSettingsCard} onPress={() => router.push('/plant-settings')}>
+          <View style={styles.plantSettingsIcon}>
+            <MaterialIcons name="local-florist" size={22} color={EcoColors.primary} />
+          </View>
+          <View style={styles.plantSettingsText}>
+            <ThemedText style={styles.plantSettingsTitle}>Tu planta</ThemedText>
+            <ThemedText style={styles.plantSettingsDescription}>Edita su nombre, especie y foto.</ThemedText>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={EcoColors.outline} />
+        </TouchableOpacity>
+
         {/* Data Source Toggle */}
         <View style={styles.dataSourceSection}>
           <View style={styles.dataSourceHeader}>
@@ -567,6 +578,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F9FAF9",
+  },
+  plantSettingsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    gap: 12,
+  },
+  plantSettingsIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: EcoColors.surfaceContainerLow,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  plantSettingsText: {
+    flex: 1,
+  },
+  plantSettingsTitle: {
+    fontFamily: "Manrope_700Bold",
+    fontSize: 15,
+    color: "#171d14",
+  },
+  plantSettingsDescription: {
+    fontSize: 12,
+    color: EcoColors.outline,
+    marginTop: 3,
   },
   dataSourceSection: {
     backgroundColor: "white",
