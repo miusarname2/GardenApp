@@ -1,5 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,6 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { EditableWidget, WidgetBounds } from '@/components/EditableWidget';
 import { PlantHealthCard } from '@/components/PlantHealthCard';
 import { DashboardMetricCard } from '@/components/DashboardMetricCard';
+import { WidgetActionSheet } from '@/components/WidgetActionSheet';
 import { EcoColors } from '@/constants/theme';
 import { getDb } from '@/db';
 import { useSensorContext } from '@/contexts/sensor-context';
@@ -26,62 +33,86 @@ export default function DashboardScreen() {
   const { preferences, savePreferences } = useWidgetPreferences();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [growthIndex, setGrowthIndex] = useState(0);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSavingWidgets, setIsSavingWidgets] = useState(false);
   const [positionVersion, setPositionVersion] = useState(0);
-  const [draftWidgets, setDraftWidgets] = useState(preferences.dashboardWidgets);
+  const [widgets, setWidgets] = useState(preferences.dashboardWidgets);
+  const [isWidgetSheetOpen, setIsWidgetSheetOpen] = useState(false);
+  const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
   const widgetBounds = useRef<Record<string, WidgetBounds>>({});
   const lastDropTarget = useRef<string | null>(null);
+  const widgetsRef = useRef(preferences.dashboardWidgets);
 
-  const beginEditing = () => {
-    setDraftWidgets(preferences.dashboardWidgets);
-    setIsEditing(true);
-  };
+  useEffect(() => {
+    widgetsRef.current = preferences.dashboardWidgets;
+    setWidgets(preferences.dashboardWidgets);
+  }, [preferences.dashboardWidgets]);
 
-  const saveWidgetLayout = async () => {
-    setIsSavingWidgets(true);
+  const persistWidgets = async (nextWidgets: WidgetItem[]) => {
     try {
-      await savePreferences({ ...preferences, dashboardWidgets: draftWidgets });
-      setIsEditing(false);
+      await savePreferences({ ...preferences, dashboardWidgets: nextWidgets });
     } catch (error) {
-      console.warn('[Dashboard] Failed to save widget layout:', error);
-      Alert.alert('No se guardó el diseño', 'Revisa el almacenamiento del dispositivo e inténtalo de nuevo.');
-    } finally {
-      setIsSavingWidgets(false);
+      console.warn('[Dashboard] Failed to save widgets:', error);
+      Alert.alert('No se guardaron los widgets', 'Revisa el almacenamiento del dispositivo e inténtalo de nuevo.');
     }
   };
 
   const handleWidgetDrag = (id: string, x: number, y: number) => {
-    const enabledIds = new Set(draftWidgets.filter((widget) => widget.enabled).map((widget) => widget.id));
+    const enabledIds = new Set(widgetsRef.current.filter((widget) => widget.enabled).map((widget) => widget.id));
     const target = Object.entries(widgetBounds.current).find(([targetId, bounds]) =>
       targetId !== id &&
       enabledIds.has(targetId) &&
-      x >= bounds.x &&
-      x <= bounds.x + bounds.width &&
-      y >= bounds.y &&
-      y <= bounds.y + bounds.height,
+      x >= bounds.x + bounds.width * 0.25 &&
+      x <= bounds.x + bounds.width * 0.75 &&
+      y >= bounds.y + bounds.height * 0.25 &&
+      y <= bounds.y + bounds.height * 0.75,
     );
-    if (!target || lastDropTarget.current === target[0]) return;
+    if (!target || lastDropTarget.current === target[0]) return null;
 
+    const sourceIndex = widgetsRef.current.findIndex((widget) => widget.id === id);
+    const targetIndex = widgetsRef.current.findIndex((widget) => widget.id === target[0]);
+    if (sourceIndex < 0 || targetIndex < 0) return null;
+    const sourceBounds = widgetBounds.current[id];
+    const targetBounds = widgetBounds.current[target[0]];
+    if (!sourceBounds || !targetBounds) return null;
     lastDropTarget.current = target[0];
-    setDraftWidgets((current) => {
-      const sourceIndex = current.findIndex((widget) => widget.id === id);
-      const targetIndex = current.findIndex((widget) => widget.id === target[0]);
-      if (sourceIndex < 0 || targetIndex < 0) return current;
-      const next = [...current];
-      [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
-      return next;
-    });
+    const next = [...widgetsRef.current];
+    [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
+    widgetBounds.current[id] = targetBounds;
+    widgetBounds.current[target[0]] = sourceBounds;
+    widgetsRef.current = next;
+    setWidgets(next);
+    return {
+      layoutDeltaX: targetBounds.x + targetBounds.width / 2 - sourceBounds.x - sourceBounds.width / 2,
+      layoutDeltaY: targetBounds.y + targetBounds.height / 2 - sourceBounds.y - sourceBounds.height / 2,
+    };
   };
 
   const updateWidget = (id: string, updates: Partial<WidgetItem>) => {
-    setDraftWidgets((current) => current.map((widget) => (
+    const next = widgetsRef.current.map((widget) => (
       widget.id === id ? { ...widget, ...updates } : widget
-    )));
+    ));
+    widgetsRef.current = next;
+    setWidgets(next);
+    void persistWidgets(next);
+  };
+
+  const moveWidget = (id: string, direction: 'up' | 'down') => {
+    const current = widgetsRef.current;
+    const activeIndexes = current.flatMap((widget, index) => widget.enabled ? [index] : []);
+    const currentPosition = activeIndexes.findIndex((index) => current[index].id === id);
+    const targetPosition = currentPosition + (direction === 'up' ? -1 : 1);
+    if (currentPosition < 0 || targetPosition < 0 || targetPosition >= activeIndexes.length) return;
+
+    const next = [...current];
+    const currentIndex = activeIndexes[currentPosition];
+    const targetIndex = activeIndexes[targetPosition];
+    [next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]];
+    widgetsRef.current = next;
+    setWidgets(next);
+    void persistWidgets(next);
   };
 
   const addWidget = (id: string) => {
-    const count = draftWidgets.filter((widget) => widget.enabled).length;
+    const count = widgetsRef.current.filter((widget) => widget.enabled).length;
     if (count >= 8) {
       Alert.alert('Límite alcanzado', 'El Dashboard permite un máximo de 8 widgets.');
       return;
@@ -268,14 +299,18 @@ export default function DashboardScreen() {
       <EditableWidget
         key={widget.id}
         widget={widget}
-        editing={isEditing}
         positionVersion={positionVersion}
         style={[styles.widget, widget.size === 'large' ? styles.fullWidth : styles.halfWidth]}
         onPosition={(id, bounds) => { widgetBounds.current[id] = bounds; }}
         onDrag={handleWidgetDrag}
-        onDragEnd={() => { lastDropTarget.current = null; }}
-        onToggleSize={() => updateWidget(widget.id, { size: widget.size === 'large' ? 'small' : 'large' })}
-        onRemove={() => updateWidget(widget.id, { enabled: false })}
+        onLongPress={(selected) => {
+          setSelectedWidgetId(selected.id);
+          setIsWidgetSheetOpen(true);
+        }}
+        onDragEnd={() => {
+          lastDropTarget.current = null;
+          void persistWidgets(widgetsRef.current);
+        }}
       >
         {content}
       </EditableWidget>
@@ -293,11 +328,13 @@ export default function DashboardScreen() {
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={styles.iconButton}
-              onPress={() => isEditing ? void saveWidgetLayout() : beginEditing()}
-              disabled={isSavingWidgets}
-              accessibilityLabel={isEditing ? 'Guardar diseño del Dashboard' : 'Editar widgets del Dashboard'}
+              onPress={() => {
+                setSelectedWidgetId(null);
+                setIsWidgetSheetOpen(true);
+              }}
+              accessibilityLabel="Añadir widgets al Dashboard"
             >
-              <MaterialIcons name={isEditing ? 'check' : 'edit'} size={22} color={EcoColors.primary} />
+              <MaterialIcons name="edit" size={22} color={EcoColors.primary} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/settings')} accessibilityLabel="Conectar sensores">
               <MaterialIcons name={connectionStatus === 'connected' ? 'bluetooth-connected' : 'bluetooth-disabled'} size={22} color={connectionStatus === 'connected' ? EcoColors.primary : EcoColors.outline} />
@@ -310,33 +347,14 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={100}
-        onScroll={() => {
-          if (isEditing) setPositionVersion((version) => version + 1);
-        }}
+        onScrollEndDrag={() => setPositionVersion((version) => version + 1)}
+        onMomentumScrollEnd={() => setPositionVersion((version) => version + 1)}
       >
-        {isEditing && (
-          <View style={styles.editingHint}>
-            <ThemedText style={styles.editingHintText}>Arrastra desde el icono para ordenar; usa los controles para ajustar el tamaño u ocultar widgets.</ThemedText>
-          </View>
-        )}
         <View style={styles.widgetsContainer}>
-          {(isEditing ? draftWidgets : preferences.dashboardWidgets)
+          {widgets
             .filter((widget) => widget.enabled)
             .map(renderWidget)}
         </View>
-        {isEditing && (
-          <View style={styles.availableWidgets}>
-            <ThemedText style={styles.availableWidgetsTitle}>Añadir widgets ({draftWidgets.filter((widget) => widget.enabled).length}/8)</ThemedText>
-            <View style={styles.availableWidgetsList}>
-              {draftWidgets.filter((widget) => !widget.enabled).map((widget) => (
-                <TouchableOpacity key={widget.id} style={styles.availableWidget} onPress={() => addWidget(widget.id)}>
-                  <MaterialIcons name="add" size={16} color={EcoColors.primary} />
-                  <ThemedText style={styles.availableWidgetText}>{widget.title}</ThemedText>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
       </ScrollView>
 
       <TouchableOpacity
@@ -354,6 +372,22 @@ export default function DashboardScreen() {
           <ThemedText style={styles.fabText}>Water Now</ThemedText>
         </LinearGradient>
       </TouchableOpacity>
+      <WidgetActionSheet
+        visible={isWidgetSheetOpen}
+        selectedWidget={widgets.find((widget) => widget.id === selectedWidgetId) ?? null}
+        activeWidgets={widgets.filter((widget) => widget.enabled)}
+        availableWidgets={widgets.filter((widget) => !widget.enabled)}
+        activeWidgetCount={widgets.filter((widget) => widget.enabled).length}
+        maxWidgets={8}
+        onClose={() => setIsWidgetSheetOpen(false)}
+        onAdd={addWidget}
+        onMove={moveWidget}
+        onToggleSize={(id) => {
+          const widget = widgetsRef.current.find((item) => item.id === id);
+          if (widget) updateWidget(id, { size: widget.size === 'large' ? 'small' : 'large' });
+        }}
+        onRemove={(id) => updateWidget(id, { enabled: false })}
+      />
     </View>
   );
 }
@@ -415,44 +449,6 @@ const styles = StyleSheet.create({
   },
   fullWidth: {
     width: '100%',
-  },
-  editingHint: {
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: '#e7f1df',
-  },
-  editingHintText: {
-    color: '#40523b',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  availableWidgets: {
-    marginTop: 16,
-    gap: 10,
-  },
-  availableWidgetsTitle: {
-    color: '#206223',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  availableWidgetsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  availableWidget: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: '#e7f1df',
-  },
-  availableWidgetText: {
-    color: '#206223',
-    fontSize: 12,
   },
   tipCard: {
     minHeight: 110,

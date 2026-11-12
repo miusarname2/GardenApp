@@ -1,14 +1,14 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Platform, Dimensions } from 'react-native';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import type { BottomTabBarProps } from 'expo-router/build/layouts/Tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedText } from '@/components/themed-text';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+function CustomTabBar({ state, descriptors, emitter, navigateToTab }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -33,14 +33,14 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           const isFocused = state.index === index;
 
           const onPress = () => {
-            const event = navigation.emit({
+            const event = emitter.emit({
               type: 'tabPress',
               target: route.key,
               canPreventDefault: true,
             });
 
             if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name, route.params);
+              navigateToTab(route.key);
             }
           };
 
